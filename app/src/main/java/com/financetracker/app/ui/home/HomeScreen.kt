@@ -133,6 +133,8 @@ fun HomeScreen(
                         TransactionRow(
                             detail = detail,
                             showDate = true,
+                            isSplit = detail.categoryId == null &&
+                                detail.type != com.financetracker.app.data.txn.TxnType.TRANSFER,
                             onClick = { onEditTransaction(detail.id) }
                         )
                     }

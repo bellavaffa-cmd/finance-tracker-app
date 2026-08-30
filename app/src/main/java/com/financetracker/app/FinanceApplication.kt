@@ -9,6 +9,8 @@ import com.financetracker.app.data.backup.BackupRepository
 import com.financetracker.app.data.budget.BudgetRepository
 import com.financetracker.app.data.category.CategoryRepository
 import com.financetracker.app.data.category.DefaultCategories
+import com.financetracker.app.data.debt.DebtRepository
+import com.financetracker.app.data.goal.GoalRepository
 import com.financetracker.app.data.recurring.RecurringRepository
 import com.financetracker.app.data.settings.SettingsRepository
 import com.financetracker.app.data.tag.TagRepository
@@ -37,6 +39,8 @@ class FinanceApplication : Application() {
         )
     }
     val tagRepository: TagRepository by lazy { TagRepository(database.tagDao()) }
+    val goalRepository: GoalRepository by lazy { GoalRepository(database.goalDao()) }
+    val debtRepository: DebtRepository by lazy { DebtRepository(database.debtDao()) }
     val budgetRepository: BudgetRepository by lazy {
         BudgetRepository(database.budgetDao(), transactionRepository)
     }

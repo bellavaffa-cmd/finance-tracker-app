@@ -26,6 +26,10 @@ import com.financetracker.app.ui.accounts.AccountsScreen
 import com.financetracker.app.ui.budget.BudgetScreen
 import com.financetracker.app.ui.budget.BudgetViewModel
 import com.financetracker.app.ui.categories.CategoriesScreen
+import com.financetracker.app.ui.debts.DebtsScreen
+import com.financetracker.app.ui.debts.DebtsViewModel
+import com.financetracker.app.ui.goals.GoalsScreen
+import com.financetracker.app.ui.goals.GoalsViewModel
 import com.financetracker.app.ui.entry.EntryScreen
 import com.financetracker.app.ui.entry.EntryViewModel
 import com.financetracker.app.ui.home.HomeScreen
@@ -123,7 +127,9 @@ fun FinanceNavHost(application: FinanceApplication) {
                     onOpenAccounts = { navController.navigate(Routes.ACCOUNTS) },
                     onOpenCategories = { navController.navigate(Routes.CATEGORIES) },
                     onOpenRecurring = { navController.navigate(Routes.RECURRING) },
-                    onOpenData = { navController.navigate(Routes.DATA) }
+                    onOpenData = { navController.navigate(Routes.DATA) },
+                    onOpenGoals = { navController.navigate(Routes.GOALS) },
+                    onOpenDebts = { navController.navigate(Routes.DEBTS) }
                 )
             }
 
@@ -137,6 +143,18 @@ fun FinanceNavHost(application: FinanceApplication) {
 
             composable(Routes.RECURRING) {
                 RecurringScreen(viewModel = manageViewModel, onBack = { navController.popBackStack() })
+            }
+
+            composable(Routes.GOALS) {
+                val goalsViewModel: GoalsViewModel =
+                    viewModel(factory = GoalsViewModel.factory(application))
+                GoalsScreen(viewModel = goalsViewModel, onBack = { navController.popBackStack() })
+            }
+
+            composable(Routes.DEBTS) {
+                val debtsViewModel: DebtsViewModel =
+                    viewModel(factory = DebtsViewModel.factory(application))
+                DebtsScreen(viewModel = debtsViewModel, onBack = { navController.popBackStack() })
             }
 
             composable(Routes.DATA) {

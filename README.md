@@ -38,6 +38,13 @@ all** — there is no server, no sync, and no telemetry. Everything lives in a d
 - Cross-cutting tags: one holiday's total across flights, food and hotels, or everything to claim
   back. Filter the ledger by tag, and see per-tag totals in reports
 
+**Goals and debts**
+- Savings goals attached to an account, so progress is the real balance and can never drift from
+  it. With a deadline, each goal shows what must go in per month to arrive on time
+- Debts with rate and minimum payment, showing how long each takes on the minimum alone
+- Snowball vs avalanche compared side by side on your actual numbers, including what the difference
+  costs in interest and months
+
 **Data & security**
 - Full JSON backup, and restore from one — everything, including preferences
 - CSV export of the ledger for a spreadsheet, with amounts in both the account's own currency and
@@ -72,6 +79,9 @@ A few decisions that are load-bearing:
   transaction, so a failure part-way leaves the existing data untouched.
 - **The app never stores a PIN of its own.** The lock delegates to the OS keyguard through
   BiometricPrompt, so the secret never reaches this process.
+- **Debt amortisation runs in whole minor units, not floating point.** Interest is rounded to the
+  nearest unit each month, the way a lender actually charges it; simulating in floating point and
+  rounding at the end drifts enough to move the payoff date by a month.
 - **A split transaction contributes its legs to reports, never itself.** Category totals come from a
   union that excludes any transaction which has splits, so a split payment cannot be counted twice.
   The parent carries no category of its own, and the legs must sum to it exactly.

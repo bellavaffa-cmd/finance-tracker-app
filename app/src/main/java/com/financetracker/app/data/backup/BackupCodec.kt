@@ -5,6 +5,9 @@ import com.financetracker.app.data.account.AccountType
 import com.financetracker.app.data.budget.Budget
 import com.financetracker.app.data.category.Category
 import com.financetracker.app.data.category.CategoryKind
+import com.financetracker.app.data.debt.Debt
+import com.financetracker.app.data.debt.DebtKind
+import com.financetracker.app.data.goal.Goal
 import com.financetracker.app.data.recurring.Frequency
 import com.financetracker.app.data.recurring.RecurringRule
 import com.financetracker.app.data.settings.CurrencyRate
@@ -28,6 +31,8 @@ data class BackupPayload(
     val tags: List<Tag>,
     val tagLinks: List<TxnTag>,
     val splits: List<TxnSplit>,
+    val goals: List<Goal>,
+    val debts: List<Debt>,
     val settings: SettingsSnapshot
 ) {
     val transactionCount: Int get() = transactions.count { it.deletedAtMillis == null }
@@ -48,7 +53,7 @@ class BackupFormatException(message: String) : Exception(message)
  */
 object BackupCodec {
 
-    const val FORMAT_VERSION = 2
+    const val FORMAT_VERSION = 3
     private const val KEY_FORMAT = "formatVersion"
 
     fun encode(payload: BackupPayload, appVersion: String, nowMillis: Long): String {
@@ -175,6 +180,37 @@ object BackupCodec {
                 putOrNull("categoryId", split.categoryId)
                 put("amountMinor", split.amountMinor)
                 put("note", split.note)
+            }
+        })
+
+        root.put("goals", payload.goals.jsonArray { goal ->
+            JSONObject().apply {
+                put("id", goal.id)
+                put("name", goal.name)
+                put("accountId", goal.accountId)
+                put("targetMinor", goal.targetMinor)
+                put("startingBalanceMinor", goal.startingBalanceMinor)
+                putOrNull("targetDateMillis", goal.targetDateMillis)
+                put("colorArgb", goal.colorArgb)
+                put("note", goal.note)
+                put("isArchived", goal.isArchived)
+                put("createdAtMillis", goal.createdAtMillis)
+            }
+        })
+
+        root.put("debts", payload.debts.jsonArray { debt ->
+            JSONObject().apply {
+                put("id", debt.id)
+                put("name", debt.name)
+                put("kind", debt.kind.name)
+                put("balanceMinor", debt.balanceMinor)
+                put("currencyCode", debt.currencyCode)
+                put("annualRatePercent", debt.annualRatePercent)
+                put("minimumPaymentMinor", debt.minimumPaymentMinor)
+                put("colorArgb", debt.colorArgb)
+                put("note", debt.note)
+                put("isActive", debt.isActive)
+                put("createdAtMillis", debt.createdAtMillis)
             }
         })
 
@@ -307,6 +343,35 @@ object BackupCodec {
                     categoryId = o.longOrNull("categoryId"),
                     amountMinor = o.optLong("amountMinor", 0),
                     note = o.optString("note", "")
+                )
+            },
+            goals = root.list("goals") { o ->
+                Goal(
+                    id = o.getLong("id"),
+                    name = o.optString("name", ""),
+                    accountId = o.getLong("accountId"),
+                    targetMinor = o.optLong("targetMinor", 0),
+                    startingBalanceMinor = o.optLong("startingBalanceMinor", 0),
+                    targetDateMillis = o.longOrNull("targetDateMillis"),
+                    colorArgb = o.optInt("colorArgb", DEFAULT_COLOR),
+                    note = o.optString("note", ""),
+                    isArchived = o.optBoolean("isArchived", false),
+                    createdAtMillis = o.optLong("createdAtMillis", 0)
+                )
+            },
+            debts = root.list("debts") { o ->
+                Debt(
+                    id = o.getLong("id"),
+                    name = o.optString("name", ""),
+                    kind = enumOf(o.optString("kind"), DebtKind.OWED_BY_ME),
+                    balanceMinor = o.optLong("balanceMinor", 0),
+                    currencyCode = o.optString("currencyCode", "EUR"),
+                    annualRatePercent = o.optDouble("annualRatePercent", 0.0),
+                    minimumPaymentMinor = o.optLong("minimumPaymentMinor", 0),
+                    colorArgb = o.optInt("colorArgb", DEFAULT_COLOR),
+                    note = o.optString("note", ""),
+                    isActive = o.optBoolean("isActive", true),
+                    createdAtMillis = o.optLong("createdAtMillis", 0)
                 )
             },
             settings = settings

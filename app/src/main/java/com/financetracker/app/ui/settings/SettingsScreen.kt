@@ -17,6 +17,8 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.AlertDialog
@@ -53,7 +55,9 @@ fun SettingsScreen(
     onOpenAccounts: () -> Unit,
     onOpenCategories: () -> Unit,
     onOpenRecurring: () -> Unit,
-    onOpenData: () -> Unit
+    onOpenData: () -> Unit,
+    onOpenGoals: () -> Unit,
+    onOpenDebts: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
     var showCurrencyPicker by remember { mutableStateOf(false) }
@@ -91,6 +95,18 @@ fun SettingsScreen(
                         "${state.rules.count { it.isActive }} active",
                         Icons.Filled.Autorenew,
                         onOpenRecurring
+                    )
+                    NavRow(
+                        "Savings goals",
+                        "Targets with a monthly figure",
+                        Icons.Filled.Savings,
+                        onOpenGoals
+                    )
+                    NavRow(
+                        "Debts",
+                        "Payoff projections and strategies",
+                        Icons.Filled.CreditCard,
+                        onOpenDebts
                     )
                     NavRow(
                         "Data & security",

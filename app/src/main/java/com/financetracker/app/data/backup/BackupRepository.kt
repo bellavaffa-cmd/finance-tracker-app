@@ -85,6 +85,8 @@ class BackupRepository(
             database.categoryDao().clear()
             database.accountDao().clear()
             database.currencyRateDao().clear()
+            database.goalDao().clear()
+            database.debtDao().clear()
 
             database.accountDao().insertAll(payload.accounts)
             database.categoryDao().insertAll(payload.categories)
@@ -96,6 +98,8 @@ class BackupRepository(
             // Links and splits last: both point at rows that must already exist.
             database.tagDao().linkAll(payload.tagLinks)
             database.splitDao().insertAll(payload.splits)
+            database.goalDao().insertAll(payload.goals)
+            database.debtDao().insertAll(payload.debts)
         }
         settings.restore(payload.settings)
 
@@ -128,6 +132,8 @@ class BackupRepository(
         tags = database.tagDao().all(),
         tagLinks = database.tagDao().allLinks(),
         splits = database.splitDao().all(),
+        goals = database.goalDao().all(),
+        debts = database.debtDao().all(),
         settings = settings.snapshot()
     )
 

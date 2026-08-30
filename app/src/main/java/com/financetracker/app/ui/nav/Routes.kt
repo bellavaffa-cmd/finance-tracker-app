@@ -17,6 +17,8 @@ object Routes {
     const val CATEGORIES = "categories"
     const val RECURRING = "recurring"
     const val DATA = "data"
+    const val GOALS = "goals"
+    const val DEBTS = "debts"
 
     /** Entry doubles as add and edit; -1 means "new". */
     const val ENTRY = "entry/{transactionId}"

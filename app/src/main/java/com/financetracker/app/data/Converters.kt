@@ -3,6 +3,7 @@ package com.financetracker.app.data
 import androidx.room.TypeConverter
 import com.financetracker.app.data.account.AccountType
 import com.financetracker.app.data.category.CategoryKind
+import com.financetracker.app.data.debt.DebtKind
 import com.financetracker.app.data.recurring.Frequency
 import com.financetracker.app.data.txn.TxnType
 
@@ -24,4 +25,7 @@ class Converters {
 
     @TypeConverter fun frequencyToString(value: Frequency): String = value.name
     @TypeConverter fun stringToFrequency(value: String): Frequency = Frequency.valueOf(value)
+
+    @TypeConverter fun debtKindToString(value: DebtKind): String = value.name
+    @TypeConverter fun stringToDebtKind(value: String): DebtKind = DebtKind.valueOf(value)
 }
