@@ -41,6 +41,12 @@ interface CategoryDao {
     @Insert
     suspend fun insertAll(categories: List<Category>): List<Long>
 
+    @Query("SELECT * FROM category ORDER BY id ASC")
+    suspend fun all(): List<Category>
+
+    @Query("DELETE FROM category")
+    suspend fun clear()
+
     @Update
     suspend fun update(category: Category)
 

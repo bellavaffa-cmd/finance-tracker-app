@@ -32,6 +32,14 @@ all** — there is no server, no sync, and no telemetry. Everything lives in a d
 - Month-on-month comparison
 - Per-category breakdown with share of total
 
+**Data & security**
+- Full JSON backup, and restore from one — everything, including preferences
+- CSV export of the ledger for a spreadsheet, with amounts in both the account's own currency and
+  the base currency
+- Optional app lock using the device keyguard: fingerprint, face, PIN, pattern or password
+- Files are written through the Storage Access Framework, so you choose where they go and the app
+  needs no storage permission
+
 **Entry**
 The screen the app lives or dies on. Amounts are typed on a keypad in minor units — tapping
 `2 3 5 0` gives `€23.50`, so there is no decimal point to fight. Account, date and exchange rate
@@ -52,6 +60,12 @@ A few decisions that are load-bearing:
 - **Deletes are soft.** Removing a category un-categorises its transactions and promotes its
   subcategories rather than destroying history; an account that has transactions can only be
   archived.
+- **Restoring replaces, it does not merge.** Merging two ledgers safely needs a stable identity for
+  each transaction across devices; without one, a merge would silently duplicate or drop entries —
+  the two failure modes a finance app can least afford. The whole restore runs in one database
+  transaction, so a failure part-way leaves the existing data untouched.
+- **The app never stores a PIN of its own.** The lock delegates to the OS keyguard through
+  BiometricPrompt, so the secret never reaches this process.
 
 ## Building
 

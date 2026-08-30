@@ -122,6 +122,25 @@ interface TransactionDao {
     @Query("SELECT MIN(dateMillis) FROM txn WHERE deletedAtMillis IS NULL")
     suspend fun earliestDateMillis(): Long?
 
+    // --- Backup, restore and export -----------------------------------------------------------
+
+    /**
+     * Everything, soft-deleted rows included. A backup that quietly dropped them would resurrect
+     * deleted transactions on the next restore, because their ids would be free to reuse.
+     */
+    @Query("SELECT * FROM txn ORDER BY id ASC")
+    suspend fun all(): List<Transaction>
+
+    /** Joined rows for CSV export, live entries only, oldest first so the file reads chronologically. */
+    @Query(DETAIL_SELECT + "WHERE t.deletedAtMillis IS NULL ORDER BY t.dateMillis ASC, t.id ASC")
+    suspend fun allDetails(): List<TransactionDetail>
+
+    @Insert
+    suspend fun insertAll(transactions: List<Transaction>)
+
+    @Query("DELETE FROM txn")
+    suspend fun clear()
+
     @Insert
     suspend fun insert(transaction: Transaction): Long
 

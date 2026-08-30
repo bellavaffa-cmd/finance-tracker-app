@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,7 +52,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenAccounts: () -> Unit,
     onOpenCategories: () -> Unit,
-    onOpenRecurring: () -> Unit
+    onOpenRecurring: () -> Unit,
+    onOpenData: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
     var showCurrencyPicker by remember { mutableStateOf(false) }
@@ -89,6 +91,12 @@ fun SettingsScreen(
                         "${state.rules.count { it.isActive }} active",
                         Icons.Filled.Autorenew,
                         onOpenRecurring
+                    )
+                    NavRow(
+                        "Data & security",
+                        "Backup, CSV export, app lock",
+                        Icons.Filled.Shield,
+                        onOpenData
                     )
                 }
             }
@@ -136,7 +144,8 @@ fun SettingsScreen(
                 SectionCard(title = "About") {
                     Text(
                         "Everything is stored on this device only. There is no account, no server " +
-                            "and no network access.",
+                            "and no network access. Take a backup from Data & security so it " +
+                            "survives losing the phone.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

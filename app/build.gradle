@@ -88,4 +88,12 @@ dependencies {
 
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
     implementation 'androidx.datastore:datastore-preferences:1.1.1'
+
+    // Device-credential fallback comes free with BiometricPrompt, so the app never has to
+    // store a PIN of its own - the lock is enforced by the OS keyguard.
+    implementation 'androidx.biometric:biometric:1.1.0'
+    // biometric:1.1.0 pulls in fragment 1.2.5, whose FragmentActivity still enforces the legacy
+    // "lower 16 bits only" request-code check. The Activity Result API generates codes across the
+    // full int range, so every file picker launched from this activity crashes without this bump.
+    implementation 'androidx.fragment:fragment-ktx:1.8.2'
 }

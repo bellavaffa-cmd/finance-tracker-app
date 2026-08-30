@@ -5,6 +5,7 @@ import com.financetracker.app.data.AppDatabase
 import com.financetracker.app.data.account.Account
 import com.financetracker.app.data.account.AccountRepository
 import com.financetracker.app.data.account.AccountType
+import com.financetracker.app.data.backup.BackupRepository
 import com.financetracker.app.data.budget.BudgetRepository
 import com.financetracker.app.data.category.CategoryRepository
 import com.financetracker.app.data.category.DefaultCategories
@@ -38,6 +39,15 @@ class FinanceApplication : Application() {
             transactions = transactionRepository,
             accounts = accountRepository,
             settings = settingsRepository
+        )
+    }
+
+    val backupRepository: BackupRepository by lazy {
+        BackupRepository(
+            context = this,
+            database = database,
+            settings = settingsRepository,
+            appVersion = BuildConfig.VERSION_NAME
         )
     }
 

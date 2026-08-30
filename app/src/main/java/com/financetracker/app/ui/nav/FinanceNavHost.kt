@@ -33,6 +33,8 @@ import com.financetracker.app.ui.home.HomeViewModel
 import com.financetracker.app.ui.recurring.RecurringScreen
 import com.financetracker.app.ui.reports.ReportsScreen
 import com.financetracker.app.ui.reports.ReportsViewModel
+import com.financetracker.app.ui.settings.DataScreen
+import com.financetracker.app.ui.settings.DataViewModel
 import com.financetracker.app.ui.settings.ManageViewModel
 import com.financetracker.app.ui.settings.SettingsScreen
 import com.financetracker.app.ui.transactions.TransactionsScreen
@@ -120,7 +122,8 @@ fun FinanceNavHost(application: FinanceApplication) {
                     onBack = { navController.popBackStack() },
                     onOpenAccounts = { navController.navigate(Routes.ACCOUNTS) },
                     onOpenCategories = { navController.navigate(Routes.CATEGORIES) },
-                    onOpenRecurring = { navController.navigate(Routes.RECURRING) }
+                    onOpenRecurring = { navController.navigate(Routes.RECURRING) },
+                    onOpenData = { navController.navigate(Routes.DATA) }
                 )
             }
 
@@ -134,6 +137,12 @@ fun FinanceNavHost(application: FinanceApplication) {
 
             composable(Routes.RECURRING) {
                 RecurringScreen(viewModel = manageViewModel, onBack = { navController.popBackStack() })
+            }
+
+            composable(Routes.DATA) {
+                val dataViewModel: DataViewModel =
+                    viewModel(factory = DataViewModel.factory(application))
+                DataScreen(viewModel = dataViewModel, onBack = { navController.popBackStack() })
             }
         }
     }

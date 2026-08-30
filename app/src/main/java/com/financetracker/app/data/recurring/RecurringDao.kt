@@ -46,6 +46,15 @@ interface RecurringDao {
     @Insert
     suspend fun insert(rule: RecurringRule): Long
 
+    @Query("SELECT * FROM recurring_rule ORDER BY id ASC")
+    suspend fun all(): List<RecurringRule>
+
+    @Insert
+    suspend fun insertAll(rules: List<RecurringRule>)
+
+    @Query("DELETE FROM recurring_rule")
+    suspend fun clear()
+
     @Update
     suspend fun update(rule: RecurringRule)
 

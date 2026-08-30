@@ -26,6 +26,15 @@ interface BudgetDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(budget: Budget): Long
 
+    @Query("SELECT * FROM budget ORDER BY id ASC")
+    suspend fun all(): List<Budget>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(budgets: List<Budget>)
+
+    @Query("DELETE FROM budget")
+    suspend fun clear()
+
     @Update
     suspend fun update(budget: Budget)
 

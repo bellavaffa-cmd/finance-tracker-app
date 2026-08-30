@@ -41,4 +41,10 @@ interface CurrencyRateDao {
 
     @Query("DELETE FROM currency_rate WHERE code = :code")
     suspend fun delete(code: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(rates: List<CurrencyRate>)
+
+    @Query("DELETE FROM currency_rate")
+    suspend fun clear()
 }

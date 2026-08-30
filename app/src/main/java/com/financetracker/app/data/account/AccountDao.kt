@@ -49,6 +49,17 @@ interface AccountDao {
     @Insert
     suspend fun insert(account: Account): Long
 
+    // --- Backup and restore ---------------------------------------------------------------
+
+    @Query("SELECT * FROM account ORDER BY id ASC")
+    suspend fun all(): List<Account>
+
+    @Insert
+    suspend fun insertAll(accounts: List<Account>)
+
+    @Query("DELETE FROM account")
+    suspend fun clear()
+
     @Update
     suspend fun update(account: Account)
 

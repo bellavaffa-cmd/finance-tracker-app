@@ -1,0 +1,117 @@
+package com.financetracker.app.data.backup
+
+import android.content.Context
+import android.net.Uri
+import androidx.room.withTransaction
+import com.financetracker.app.data.AppDatabase
+import com.financetracker.app.data.settings.SettingsRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.time.LocalDate
+
+/** What a restore actually put back, for the confirmation message. */
+data class RestoreSummary(
+    val accounts: Int,
+    val categories: Int,
+    val transactions: Int,
+    val budgets: Int,
+    val rules: Int
+)
+
+/**
+ * Export and restore. All file access goes through the Storage Access Framework, so the user picks
+ * the destination themselves and the app needs no storage permission at all - and the file lands
+ * somewhere they chose, rather than in app-private storage that vanishes on uninstall.
+ */
+class BackupRepository(
+    private val context: Context,
+    private val database: AppDatabase,
+    private val settings: SettingsRepository,
+    private val appVersion: String
+) {
+
+    suspend fun exportBackup(target: Uri): Int = withContext(Dispatchers.IO) {
+        val payload = collect()
+        val json = BackupCodec.encode(payload, appVersion, System.currentTimeMillis())
+        write(target, json)
+        payload.transactionCount
+    }
+
+    suspend fun exportCsv(target: Uri): Int = withContext(Dispatchers.IO) {
+        val rows = database.transactionDao().allDetails()
+        val csv = CsvExporter.export(rows, settings.currentBaseCurrency())
+        write(target, csv)
+        rows.size
+    }
+
+    /**
+     * Replaces everything with the contents of [source].
+     *
+     * This is a replace, not a merge. Merging two ledgers cannot be done safely without a stable
+     * identity for each transaction across devices, and a merge that guesses would silently
+     * duplicate or drop entries - the two failure modes a finance app can least afford. The whole
+     * thing runs in one Room transaction, so a failure part-way leaves the existing data intact.
+     */
+    suspend fun restore(source: Uri): RestoreSummary = withContext(Dispatchers.IO) {
+        val text = context.contentResolver.openInputStream(source)?.use {
+            it.readBytes().toString(Charsets.UTF_8)
+        } ?: throw BackupFormatException("Could not read that file.")
+
+        val payload = BackupCodec.decode(text.removePrefix("\uFEFF"))
+
+        database.withTransaction {
+            // Children first, so nothing is left pointing at a row that has already gone.
+            database.transactionDao().clear()
+            database.budgetDao().clear()
+            database.recurringDao().clear()
+            database.categoryDao().clear()
+            database.accountDao().clear()
+            database.currencyRateDao().clear()
+
+            database.accountDao().insertAll(payload.accounts)
+            database.categoryDao().insertAll(payload.categories)
+            database.recurringDao().insertAll(payload.rules)
+            database.budgetDao().insertAll(payload.budgets)
+            database.transactionDao().insertAll(payload.transactions)
+            database.currencyRateDao().insertAll(payload.rates)
+        }
+        settings.restore(payload.settings)
+
+        RestoreSummary(
+            accounts = payload.accounts.size,
+            categories = payload.categories.size,
+            transactions = payload.transactionCount,
+            budgets = payload.budgets.size,
+            rules = payload.rules.size
+        )
+    }
+
+    private fun write(target: Uri, content: String) {
+        // "wt" truncates: without it, overwriting a longer existing file leaves its tail behind and
+        // produces a file that is silently corrupt from the end.
+        context.contentResolver.openOutputStream(target, "wt")?.use {
+            it.write(content.toByteArray(Charsets.UTF_8))
+            it.flush()
+        } ?: throw BackupFormatException("Could not write to that location.")
+    }
+
+    private suspend fun collect(): BackupPayload = BackupPayload(
+        accounts = database.accountDao().all(),
+        categories = database.categoryDao().all(),
+        transactions = database.transactionDao().all(),
+        budgets = database.budgetDao().all(),
+        rules = database.recurringDao().all(),
+        rates = database.currencyRateDao().all(),
+        settings = settings.snapshot()
+    )
+
+    companion object {
+        const val BACKUP_MIME = "application/json"
+        const val CSV_MIME = "text/csv"
+
+        /** Dated filenames so successive exports sit next to each other instead of overwriting. */
+        fun backupFileName(today: LocalDate = LocalDate.now()) = "finance-tracker-backup-$today.json"
+
+        fun csvFileName(today: LocalDate = LocalDate.now()) = "finance-tracker-$today.csv"
+    }
+}

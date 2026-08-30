@@ -13,6 +13,14 @@ import kotlinx.coroutines.flow.map
 
 private val Context.settingsDataStore by preferencesDataStore(name = "finance_settings")
 
+/** The subset of preferences that travels in a backup file. */
+data class SettingsSnapshot(
+    val baseCurrency: String,
+    val monthStartDay: Int,
+    val hideBalances: Boolean,
+    val appLockEnabled: Boolean
+)
+
 /** App-wide preferences. Small enough to live in DataStore rather than another Room table. */
 class SettingsRepository(private val context: Context) {
 
@@ -20,6 +28,7 @@ class SettingsRepository(private val context: Context) {
     private val monthStartDayKey = intPreferencesKey("month_start_day")
     private val seededKey = booleanPreferencesKey("seeded")
     private val hideBalancesKey = booleanPreferencesKey("hide_balances")
+    private val appLockKey = booleanPreferencesKey("app_lock")
 
     val baseCurrency: Flow<String> =
         context.settingsDataStore.data.map { it[baseCurrencyKey] ?: DEFAULT_BASE_CURRENCY }
@@ -56,6 +65,39 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun markSeeded() {
         context.settingsDataStore.edit { it[seededKey] = true }
+    }
+
+    /** Requires the device keyguard (biometric, PIN, pattern) before the ledger is shown. */
+    val appLockEnabled: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[appLockKey] ?: false }
+
+    suspend fun setAppLockEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[appLockKey] = enabled }
+    }
+
+    /** Preferences captured into a backup. The seeded flag is deliberately not included. */
+    suspend fun snapshot(): SettingsSnapshot {
+        val prefs = context.settingsDataStore.data.first()
+        return SettingsSnapshot(
+            baseCurrency = prefs[baseCurrencyKey] ?: DEFAULT_BASE_CURRENCY,
+            monthStartDay = prefs[monthStartDayKey] ?: 1,
+            hideBalances = prefs[hideBalancesKey] ?: false,
+            appLockEnabled = prefs[appLockKey] ?: false
+        )
+    }
+
+    /**
+     * Restores preferences from a backup, and marks the database as seeded so the default
+     * categories are not re-created on top of the ones that just came back.
+     */
+    suspend fun restore(snapshot: SettingsSnapshot) {
+        context.settingsDataStore.edit {
+            it[baseCurrencyKey] = snapshot.baseCurrency
+            it[monthStartDayKey] = snapshot.monthStartDay.coerceIn(1, MonthPeriod.MAX_START_DAY)
+            it[hideBalancesKey] = snapshot.hideBalances
+            it[appLockKey] = snapshot.appLockEnabled
+            it[seededKey] = true
+        }
     }
 
     companion object {
