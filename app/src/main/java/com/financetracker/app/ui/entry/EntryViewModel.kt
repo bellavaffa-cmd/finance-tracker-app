@@ -9,6 +9,8 @@ import com.financetracker.app.data.Money
 import com.financetracker.app.data.account.AccountRepository
 import com.financetracker.app.data.account.AccountWithBalance
 import com.financetracker.app.data.attachment.AttachmentStore
+import com.financetracker.app.data.receipt.ReceiptReading
+import com.financetracker.app.data.receipt.ReceiptScanner
 import com.financetracker.app.data.category.Category
 import com.financetracker.app.data.category.CategoryGroup
 import com.financetracker.app.data.category.CategoryKind
@@ -57,6 +59,9 @@ data class EntryUiState(
     /** File name of the attached receipt, if there is one. */
     val attachmentName: String? = null,
     val attaching: Boolean = false,
+    val scanning: Boolean = false,
+    /** What was read off the receipt, offered but never applied on its own. */
+    val reading: ReceiptReading? = null,
     val error: String? = null,
     val saved: Boolean = false,
     val loading: Boolean = true
@@ -101,7 +106,8 @@ class EntryViewModel(
     private val transactions: TransactionRepository,
     private val tags: TagRepository,
     private val rules: PayeeRuleRepository,
-    private val attachments: AttachmentStore
+    private val attachments: AttachmentStore,
+    private val scanner: ReceiptScanner
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(EntryUiState())
@@ -257,13 +263,50 @@ class EntryViewModel(
             it.copy(
                 attaching = false,
                 attachmentName = stored ?: it.attachmentName,
+                reading = null,
                 error = if (stored == null) "That image could not be read." else it.error
             )
         }
         if (stored != null && previous != null && previous != stored) {
             viewModelScope.launch { attachments.delete(previous) }
         }
+        if (stored != null) scanReceipt(stored)
     }
+
+    /**
+     * Reads the receipt in the background. Nothing is filled in automatically - a total read off a
+     * blurry photograph is a guess, and a wrong amount quietly written into a ledger is worse than
+     * no amount at all. The result is offered as a chip the user can accept.
+     */
+    private fun scanReceipt(name: String) = viewModelScope.launch {
+        val uri = attachments.uriFor(name) ?: return@launch
+        _state.update { it.copy(scanning = true) }
+        val reading = scanner.scan(uri)
+        _state.update { current ->
+            current.copy(
+                scanning = false,
+                // Only worth offering when it found something the entry does not already have.
+                reading = reading.takeIf { it.totalMinor != null && it.totalMinor > 0 }
+            )
+        }
+    }
+
+    /** Accepts the scanned total, and the merchant name when the payee is still blank. */
+    fun applyReading() {
+        val reading = _state.value.reading ?: return
+        val total = reading.totalMinor ?: return
+        _state.update { current ->
+            current.copy(
+                amountMinor = total,
+                payee = current.payee.ifBlank { reading.merchant?.take(40).orEmpty() },
+                reading = null,
+                error = null
+            )
+        }
+        recomputeTransferAmount()
+    }
+
+    fun dismissReading() = _state.update { it.copy(reading = null) }
 
     fun removeAttachment() {
         val current = _state.value.attachmentName ?: return
@@ -536,7 +579,8 @@ class EntryViewModel(
                 transactions = it.transactionRepository,
                 tags = it.tagRepository,
                 rules = it.payeeRuleRepository,
-                attachments = it.attachmentStore
+                attachments = it.attachmentStore,
+                scanner = it.receiptScanner
             )
         }
     }

@@ -63,6 +63,8 @@ all** — there is no server, no sync, and no telemetry. Everything lives in a d
   perfectly readable
 - **No camera permission.** Photos go through the system camera app via `ACTION_IMAGE_CAPTURE`,
   which needs no grant as long as the app does not declare one
+- Reads the total off the photo and offers it, along with the shop name. Recognition runs entirely
+  on device — the model ships inside the APK, so a receipt photograph never leaves the phone
 
 **Auto-categorise**
 - Rules that fill in the category when a payee matches: contains / starts with / is exactly
@@ -108,6 +110,13 @@ A few decisions that are load-bearing:
   transaction, so a failure part-way leaves the existing data untouched.
 - **The app never stores a PIN of its own.** The lock delegates to the OS keyguard through
   BiometricPrompt, so the secret never reaches this process.
+- **A scanned total is offered, never applied.** A figure read off a photograph is a guess,
+  and a wrong amount written silently into a ledger is worse than no amount at all. The line
+  it came from is shown so the suggestion can be judged at a glance.
+- **Receipt parsing uses the text's geometry, not its list order.** Recognition returns a
+  receipt's label column and amount column as separate blocks, so the line following
+  "TOTAL" in list order is frequently an item two rows above it. Amounts are paired with
+  their label by vertical overlap instead.
 - **Receipts live in app-private storage and are not in the JSON backup.** Embedding them
   would turn a small text file into hundreds of megabytes of base64; Android's own app
   backup covers the image files instead. The backup carries the file name, and a restore
@@ -151,6 +160,10 @@ Requires JDK 17 and the Android SDK.
 ```bash
 ./gradlew assembleDebug
 ```
+
+The APK is large (~43 MB) because the on-device text recognition model is bundled rather
+than downloaded. `abiFilters` trims it to `arm64-v8a` and `x86_64`; add your architecture
+there if you build for something else.
 
 The APK lands in `app/build/outputs/apk/debug/`.
 

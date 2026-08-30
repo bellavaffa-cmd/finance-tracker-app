@@ -44,6 +44,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.financetracker.app.data.Money
+import com.financetracker.app.data.receipt.ReceiptReading
+import com.financetracker.app.ui.theme.Accent
 import com.financetracker.app.ui.theme.BorderColor
 import com.financetracker.app.ui.theme.Negative
 import com.financetracker.app.ui.theme.Surface1
@@ -60,11 +63,16 @@ import java.io.File
 fun ReceiptSection(
     attachmentName: String?,
     attaching: Boolean,
+    scanning: Boolean,
+    reading: ReceiptReading?,
+    currencyCode: String,
     uriFor: (String) -> Uri?,
     onPickTarget: () -> Pair<File, Uri>,
     onCaptured: (File) -> Unit,
     onPicked: (Uri) -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    onAcceptReading: () -> Unit,
+    onDismissReading: () -> Unit
 ) {
     val context = LocalContext.current
     var pendingCapture by remember { mutableStateOf<File?>(null) }
@@ -127,6 +135,48 @@ fun ReceiptSection(
                     )
                 }
                 TextButton(onClick = onRemove) { Text("Remove", color = Negative) }
+            }
+
+            if (scanning) {
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "Reading the receipt…",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // A suggestion, never an automatic fill: a total read off a photograph is a guess, and
+            // the line it came from is shown so it can be judged at a glance.
+            reading?.totalMinor?.let { total ->
+                Spacer(Modifier.height(10.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Accent.copy(alpha = 0.12f))
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        "Found ${Money.format(total, currencyCode)} on this receipt",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    reading.totalSourceLine?.let { line ->
+                        Text(
+                            "from \"${line.take(40)}\"",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                        TextButton(onClick = onDismissReading) { Text("Ignore") }
+                        TextButton(onClick = onAcceptReading) { Text("Use it") }
+                    }
+                }
             }
         } else if (attaching) {
             Row(verticalAlignment = Alignment.CenterVertically) {

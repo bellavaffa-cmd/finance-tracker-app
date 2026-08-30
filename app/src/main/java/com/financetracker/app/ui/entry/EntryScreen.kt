@@ -228,11 +228,16 @@ fun EntryScreen(
             ReceiptSection(
                 attachmentName = state.attachmentName,
                 attaching = state.attaching,
+                scanning = state.scanning,
+                reading = state.reading,
+                currencyCode = state.currencyCode,
                 uriFor = viewModel::attachmentUri,
                 onPickTarget = viewModel::cameraTarget,
                 onCaptured = viewModel::attachCapture,
                 onPicked = viewModel::attachFrom,
-                onRemove = viewModel::removeAttachment
+                onRemove = viewModel::removeAttachment,
+                onAcceptReading = viewModel::applyReading,
+                onDismissReading = viewModel::dismissReading
             )
 
             Spacer(Modifier.height(16.dp))

@@ -14,6 +14,13 @@ android {
         targetSdk 34
         versionCode 100
         versionName '1.0.0'
+
+        // The bundled OCR model ships native libraries for every ABI, which roughly triples the
+        // APK. A personal build only ever runs on one architecture plus the emulator, so the
+        // other two are dead weight.
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64'
+        }
     }
 
     // This is a personal build with no release signing key, so `assembleRelease` produces an
@@ -79,4 +86,9 @@ dependencies {
     // "lower 16 bits only" request-code check. The Activity Result API generates codes across the
     // full int range, so every file picker launched from this activity crashes without this bump.
     implementation 'androidx.fragment:fragment-ktx:1.8.2'
+
+    // The *bundled* recogniser, not the Play-Services one: the model ships inside the APK
+    // and runs entirely on device, so reading a receipt needs no network and the app keeps
+    // having no INTERNET permission. It costs APK size, which is the right trade here.
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
 }
