@@ -15,7 +15,8 @@ data class RestoreSummary(
     val categories: Int,
     val transactions: Int,
     val budgets: Int,
-    val rules: Int
+    val rules: Int,
+    val tags: Int
 )
 
 /**
@@ -38,10 +39,24 @@ class BackupRepository(
     }
 
     suspend fun exportCsv(target: Uri): Int = withContext(Dispatchers.IO) {
-        val rows = database.transactionDao().allDetails()
-        val csv = CsvExporter.export(rows, settings.currentBaseCurrency())
-        write(target, csv)
-        rows.size
+        val details = database.transactionDao().allDetails()
+        val ids = details.map { it.id }
+        // Two bulk queries rather than two per row: a few years of entries would otherwise be
+        // thousands of round-trips and a visibly frozen screen.
+        val splits = database.splitDao().forTransactions(ids).groupBy { it.txnId }
+        val tags = database.tagDao().tagsForTransactions(ids)
+            .groupBy { it.txnId }
+            .mapValues { entry -> entry.value.map { "#" + it.name } }
+
+        val rows = details.map { detail ->
+            ExportRow(
+                detail = detail,
+                splits = splits[detail.id].orEmpty(),
+                tags = tags[detail.id].orEmpty()
+            )
+        }
+        write(target, CsvExporter.export(rows, settings.currentBaseCurrency()))
+        details.size
     }
 
     /**
@@ -61,6 +76,9 @@ class BackupRepository(
 
         database.withTransaction {
             // Children first, so nothing is left pointing at a row that has already gone.
+            database.tagDao().clearLinks()
+            database.splitDao().clear()
+            database.tagDao().clearTags()
             database.transactionDao().clear()
             database.budgetDao().clear()
             database.recurringDao().clear()
@@ -74,6 +92,10 @@ class BackupRepository(
             database.budgetDao().insertAll(payload.budgets)
             database.transactionDao().insertAll(payload.transactions)
             database.currencyRateDao().insertAll(payload.rates)
+            database.tagDao().insertAll(payload.tags)
+            // Links and splits last: both point at rows that must already exist.
+            database.tagDao().linkAll(payload.tagLinks)
+            database.splitDao().insertAll(payload.splits)
         }
         settings.restore(payload.settings)
 
@@ -82,7 +104,8 @@ class BackupRepository(
             categories = payload.categories.size,
             transactions = payload.transactionCount,
             budgets = payload.budgets.size,
-            rules = payload.rules.size
+            rules = payload.rules.size,
+            tags = payload.tags.size
         )
     }
 
@@ -102,6 +125,9 @@ class BackupRepository(
         budgets = database.budgetDao().all(),
         rules = database.recurringDao().all(),
         rates = database.currencyRateDao().all(),
+        tags = database.tagDao().all(),
+        tagLinks = database.tagDao().allLinks(),
+        splits = database.splitDao().all(),
         settings = settings.snapshot()
     )
 

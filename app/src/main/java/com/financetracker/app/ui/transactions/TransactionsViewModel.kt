@@ -10,6 +10,10 @@ import com.financetracker.app.data.account.AccountWithBalance
 import com.financetracker.app.data.category.Category
 import com.financetracker.app.data.category.CategoryRepository
 import com.financetracker.app.data.settings.SettingsRepository
+import com.financetracker.app.data.tag.Tag
+import com.financetracker.app.data.tag.TagDao
+import com.financetracker.app.data.tag.TaggedRow
+import com.financetracker.app.data.tag.TagRepository
 import com.financetracker.app.data.txn.TransactionDetail
 import com.financetracker.app.data.txn.TransactionRepository
 import com.financetracker.app.data.txn.TxnFilter
@@ -38,8 +42,11 @@ data class TransactionsUiState(
     val days: List<DayGroup> = emptyList(),
     val accounts: List<AccountWithBalance> = emptyList(),
     val categories: List<Category> = emptyList(),
+    val tags: List<Tag> = emptyList(),
+    val tagsByTransaction: Map<Long, List<TaggedRow>> = emptyMap(),
     val accountId: Long? = null,
     val categoryId: Long? = null,
+    val tagId: Long? = null,
     val type: TxnType? = null,
     val query: String = "",
     val minInput: String = "",
@@ -49,7 +56,7 @@ data class TransactionsUiState(
     val loading: Boolean = true
 ) {
     val isFiltered: Boolean
-        get() = accountId != null || categoryId != null || type != null ||
+        get() = accountId != null || categoryId != null || tagId != null || type != null ||
             query.isNotBlank() || minInput.isNotBlank() || maxInput.isNotBlank()
 
     val count: Int get() = days.sumOf { it.items.size }
@@ -59,6 +66,7 @@ private data class Query(
     val monthOffset: Long = 0,
     val accountId: Long? = null,
     val categoryId: Long? = null,
+    val tagId: Long? = null,
     val type: TxnType? = null,
     val text: String = "",
     val minInput: String = "",
@@ -70,7 +78,9 @@ class TransactionsViewModel(
     private val settings: SettingsRepository,
     private val accounts: AccountRepository,
     private val categories: CategoryRepository,
-    private val transactions: TransactionRepository
+    private val transactions: TransactionRepository,
+    private val tags: TagRepository,
+    private val tagDao: TagDao
 ) : ViewModel() {
 
     private val query = MutableStateFlow(Query())
@@ -89,6 +99,7 @@ class TransactionsViewModel(
                 toMillis = period.endMillisExclusive,
                 accountId = q.accountId,
                 categoryId = q.categoryId,
+                tagId = q.tagId,
                 type = q.type,
                 query = q.text,
                 minMinor = Money.parseToMinor(q.minInput, baseCurrency),
@@ -98,16 +109,21 @@ class TransactionsViewModel(
             combine(
                 transactions.filtered(filter),
                 accounts.activeAccounts,
-                categories.allCategories
-            ) { items, accountList, categoryList ->
+                categories.allCategories,
+                tags.allTags,
+                tagDao.observeAllLinks()
+            ) { items, accountList, categoryList, tagList, links ->
                 TransactionsUiState(
                     period = period,
                     baseCurrency = baseCurrency,
                     days = groupByDay(items, baseCurrency),
                     accounts = accountList,
                     categories = categoryList,
+                    tags = tagList,
+                    tagsByTransaction = links.groupBy { link -> link.txnId },
                     accountId = q.accountId,
                     categoryId = q.categoryId,
+                    tagId = q.tagId,
                     type = q.type,
                     query = q.text,
                     minInput = q.minInput,
@@ -125,6 +141,7 @@ class TransactionsViewModel(
 
     fun setAccount(id: Long?) = query.update { it.copy(accountId = id) }
     fun setCategory(id: Long?) = query.update { it.copy(categoryId = id) }
+    fun setTag(id: Long?) = query.update { it.copy(tagId = id) }
     fun setType(type: TxnType?) = query.update { it.copy(type = type) }
     fun setQuery(text: String) = query.update { it.copy(text = text) }
     fun setMin(input: String) = query.update { it.copy(minInput = input) }
@@ -172,7 +189,9 @@ class TransactionsViewModel(
                 settings = it.settingsRepository,
                 accounts = it.accountRepository,
                 categories = it.categoryRepository,
-                transactions = it.transactionRepository
+                transactions = it.transactionRepository,
+                tags = it.tagRepository,
+                tagDao = it.database.tagDao()
             )
         }
     }

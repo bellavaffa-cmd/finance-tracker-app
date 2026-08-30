@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -152,13 +153,35 @@ fun EntryScreen(
                         onChange = viewModel::setToAmountMinor
                     )
                 }
-            } else {
-                FieldRow(
-                    label = "Category",
-                    value = state.category?.name ?: "Pick a category",
-                    colorArgb = state.category?.colorArgb,
-                    onClick = { showCategoryPicker = true }
+            } else if (state.isSplit) {
+                SplitSection(
+                    state = state,
+                    onAddLeg = viewModel::addSplitLeg,
+                    onRemoveLeg = viewModel::removeSplitLeg,
+                    onSetCategory = viewModel::setSplitCategory,
+                    onSetAmount = viewModel::setSplitAmount,
+                    onAbsorbRemainder = viewModel::absorbRemainder,
+                    onCancelSplit = viewModel::cancelSplit
                 )
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    FieldRow(
+                        label = "Category",
+                        value = state.category?.name ?: "Pick a category",
+                        colorArgb = state.category?.colorArgb,
+                        onClick = { showCategoryPicker = true },
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = viewModel::startSplit, enabled = state.amountMinor > 0) {
+                        Icon(
+                            Icons.Filled.CallSplit,
+                            contentDescription = null,
+                            modifier = Modifier.width(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("Split")
+                    }
+                }
             }
 
             FieldRow(
@@ -199,6 +222,14 @@ fun EntryScreen(
                 label = { Text("Note") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(16.dp))
+            TagSection(
+                allTags = state.allTags,
+                selectedTagIds = state.selectedTagIds,
+                onToggle = viewModel::toggleTag,
+                onCreate = viewModel::createAndApplyTag
             )
 
             state.error?.let {
@@ -351,10 +382,11 @@ private fun FieldRow(
     label: String,
     value: String,
     onClick: () -> Unit,
-    colorArgb: Int? = null
+    colorArgb: Int? = null,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() }
@@ -382,7 +414,13 @@ private fun FieldRow(
 
 @Composable
 private fun ToAmountField(value: Long, currencyCode: String, onChange: (Long) -> Unit) {
-    var text by remember(value) { mutableStateOf(Money.editString(value, currencyCode)) }
+    // Same reasoning as the split legs: keying on `value` would reset the text on every keystroke.
+    var text by remember { mutableStateOf(Money.editString(value, currencyCode)) }
+    LaunchedEffect(value) {
+        if (Money.parseToMinor(text, currencyCode) != value) {
+            text = Money.editString(value, currencyCode)
+        }
+    }
     OutlinedTextField(
         value = text,
         onValueChange = {

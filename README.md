@@ -32,6 +32,12 @@ all** — there is no server, no sync, and no telemetry. Everything lives in a d
 - Month-on-month comparison
 - Per-category breakdown with share of total
 
+**Splits and tags**
+- Split one payment across several categories, with a running remainder so it is always clear how
+  much is still unassigned — a split that does not add up cannot be saved
+- Cross-cutting tags: one holiday's total across flights, food and hotels, or everything to claim
+  back. Filter the ledger by tag, and see per-tag totals in reports
+
 **Data & security**
 - Full JSON backup, and restore from one — everything, including preferences
 - CSV export of the ledger for a spreadsheet, with amounts in both the account's own currency and
@@ -66,6 +72,9 @@ A few decisions that are load-bearing:
   transaction, so a failure part-way leaves the existing data untouched.
 - **The app never stores a PIN of its own.** The lock delegates to the OS keyguard through
   BiometricPrompt, so the secret never reaches this process.
+- **A split transaction contributes its legs to reports, never itself.** Category totals come from a
+  union that excludes any transaction which has splits, so a split payment cannot be counted twice.
+  The parent carries no category of its own, and the legs must sum to it exactly.
 
 ## Building
 

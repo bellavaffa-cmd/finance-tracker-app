@@ -59,7 +59,8 @@ class DataViewModel(
                         plural(summary.accounts, "account"),
                         plural(summary.categories, "category", "categories"),
                         plural(summary.budgets, "budget"),
-                        plural(summary.rules, "recurring rule")
+                        plural(summary.rules, "recurring rule"),
+                        plural(summary.tags, "tag")
                     ).joinToString(", ") + "."
                 )
             }

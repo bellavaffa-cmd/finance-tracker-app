@@ -6,6 +6,8 @@ import com.financetracker.app.FinanceApplication
 import com.financetracker.app.data.Money
 import com.financetracker.app.data.MonthPeriod
 import com.financetracker.app.data.settings.SettingsRepository
+import com.financetracker.app.data.tag.TagRepository
+import com.financetracker.app.data.tag.TagTotal
 import com.financetracker.app.data.txn.TransactionRepository
 import com.financetracker.app.data.txn.TxnType
 import com.financetracker.app.ui.common.FinanceViewModelFactory
@@ -34,6 +36,7 @@ data class ReportsUiState(
     val breakdown: List<CategoryBreakdown> = emptyList(),
     val totalMinorBase: Long = 0,
     val comparisonMinorBase: Long = 0,
+    val tagTotals: List<TagTotal> = emptyList(),
     val loading: Boolean = true
 ) {
     /** Signed change against the previous month, as a percentage. Null when there is nothing to compare. */
@@ -45,7 +48,8 @@ data class ReportsUiState(
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReportsViewModel(
     private val settings: SettingsRepository,
-    private val transactions: TransactionRepository
+    private val transactions: TransactionRepository,
+    private val tags: TagRepository
 ) : ViewModel() {
 
     private val monthOffset = MutableStateFlow(0L)
@@ -63,8 +67,9 @@ class ReportsViewModel(
 
             combine(
                 transactions.amountRows(params.direction, period.startMillis, period.endMillisExclusive),
-                transactions.amountRows(params.direction, previous.startMillis, previous.endMillisExclusive)
-            ) { rows, previousRows ->
+                transactions.amountRows(params.direction, previous.startMillis, previous.endMillisExclusive),
+                tags.tagTotals(params.direction, period.startMillis, period.endMillisExclusive, params.baseCurrency)
+            ) { rows, previousRows, tagTotals ->
                 val total = TransactionRepository.sumToBase(rows, params.baseCurrency)
 
                 // Rows arrive grouped to their top-level category by SQL, so subcategory spending
@@ -91,6 +96,7 @@ class ReportsViewModel(
                     breakdown = breakdown,
                     totalMinorBase = total,
                     comparisonMinorBase = TransactionRepository.sumToBase(previousRows, params.baseCurrency),
+                    tagTotals = tagTotals,
                     loading = false
                 )
             }
@@ -118,7 +124,8 @@ class ReportsViewModel(
         fun factory(app: FinanceApplication) = FinanceViewModelFactory(app) {
             ReportsViewModel(
                 settings = it.settingsRepository,
-                transactions = it.transactionRepository
+                transactions = it.transactionRepository,
+                tags = it.tagRepository
             )
         }
     }

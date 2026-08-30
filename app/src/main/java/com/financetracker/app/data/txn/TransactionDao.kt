@@ -26,8 +26,12 @@ private const val DETAIL_SELECT = "SELECT t.id, t.type, t.dateMillis, t.amountMi
  * Rows still in their own account's currency. Transfers are excluded from every aggregate here:
  * moving your own money between your own accounts is not spending, and counting it is the classic
  * way a homemade tracker ends up reporting double the expenses you actually had.
+ *
+ * Split transactions contribute their legs instead of themselves. The first half of the union
+ * therefore excludes anything that has splits, and the second half supplies those legs - if both
+ * halves matched the same transaction, every split payment would be counted twice.
  */
-private const val AMOUNT_SELECT = "SELECT t.categoryId AS categoryId, " +
+private const val UNSPLIT_AMOUNTS = "SELECT t.categoryId AS categoryId, " +
     "COALESCE(p.name, c.name) AS categoryName, " +
     "COALESCE(p.colorArgb, c.colorArgb) AS colorArgb, " +
     "t.amountMinor AS amountMinor, a.currencyCode AS currencyCode, " +
@@ -35,7 +39,23 @@ private const val AMOUNT_SELECT = "SELECT t.categoryId AS categoryId, " +
     "FROM txn t " +
     "JOIN account a ON a.id = t.accountId " +
     "LEFT JOIN category c ON c.id = t.categoryId " +
-    "LEFT JOIN category p ON p.id = c.parentId "
+    "LEFT JOIN category p ON p.id = c.parentId " +
+    "WHERE t.deletedAtMillis IS NULL AND t.type = :type " +
+    "AND t.dateMillis >= :fromMillis AND t.dateMillis < :toMillis " +
+    "AND NOT EXISTS (SELECT 1 FROM txn_split x WHERE x.txnId = t.id) "
+
+private const val SPLIT_AMOUNTS = "SELECT s.categoryId AS categoryId, " +
+    "COALESCE(p.name, c.name) AS categoryName, " +
+    "COALESCE(p.colorArgb, c.colorArgb) AS colorArgb, " +
+    "s.amountMinor AS amountMinor, a.currencyCode AS currencyCode, " +
+    "t.fxRateToBase AS fxRateToBase " +
+    "FROM txn_split s " +
+    "JOIN txn t ON t.id = s.txnId " +
+    "JOIN account a ON a.id = t.accountId " +
+    "LEFT JOIN category c ON c.id = s.categoryId " +
+    "LEFT JOIN category p ON p.id = c.parentId " +
+    "WHERE t.deletedAtMillis IS NULL AND t.type = :type " +
+    "AND t.dateMillis >= :fromMillis AND t.dateMillis < :toMillis "
 
 @Dao
 interface TransactionDao {
@@ -61,7 +81,14 @@ interface TransactionDao {
             "WHERE t.deletedAtMillis IS NULL " +
             "AND t.dateMillis >= :fromMillis AND t.dateMillis < :toMillis " +
             "AND (:accountId IS NULL OR t.accountId = :accountId OR t.toAccountId = :accountId) " +
-            "AND (:categoryId IS NULL OR t.categoryId = :categoryId OR c.parentId = :categoryId) " +
+            // A category filter must also match a split leg, or splitting a receipt would hide it
+            // from the very category it was split into.
+            "AND (:categoryId IS NULL OR t.categoryId = :categoryId OR c.parentId = :categoryId " +
+            "     OR EXISTS (SELECT 1 FROM txn_split s LEFT JOIN category sc ON sc.id = s.categoryId " +
+            "                WHERE s.txnId = t.id " +
+            "                AND (s.categoryId = :categoryId OR sc.parentId = :categoryId))) " +
+            "AND (:tagId IS NULL OR EXISTS (SELECT 1 FROM txn_tag tt " +
+            "                               WHERE tt.txnId = t.id AND tt.tagId = :tagId)) " +
             "AND (:type IS NULL OR t.type = :type) " +
             "AND (:query = '' OR t.payee LIKE '%' || :query || '%' OR t.note LIKE '%' || :query || '%' " +
             "     OR c.name LIKE '%' || :query || '%') " +
@@ -74,6 +101,7 @@ interface TransactionDao {
         toMillis: Long,
         accountId: Long?,
         categoryId: Long?,
+        tagId: Long?,
         type: String?,
         query: String,
         minMinor: Long?,
@@ -87,19 +115,20 @@ interface TransactionDao {
     suspend fun byId(id: Long): Transaction?
 
     /** Category totals for one window and one direction, grouped by top-level category. */
-    @Query(
-        AMOUNT_SELECT +
-            "WHERE t.deletedAtMillis IS NULL AND t.type = :type " +
-            "AND t.dateMillis >= :fromMillis AND t.dateMillis < :toMillis"
-    )
+    @Query(UNSPLIT_AMOUNTS + "UNION ALL " + SPLIT_AMOUNTS)
     fun observeAmountRows(type: String, fromMillis: Long, toMillis: Long): Flow<List<AmountRow>>
 
-    /** Same as [observeAmountRows] but one-shot, and optionally narrowed to a category subtree. */
+    /**
+     * Same as [observeAmountRows] but one-shot, and optionally narrowed to a category subtree.
+     * This is what budgets are measured against, so the category filter has to reach split legs
+     * too - otherwise splitting a supermarket receipt would quietly drop it out of its budget.
+     */
     @Query(
-        AMOUNT_SELECT +
-            "WHERE t.deletedAtMillis IS NULL AND t.type = :type " +
-            "AND t.dateMillis >= :fromMillis AND t.dateMillis < :toMillis " +
-            "AND (:categoryId IS NULL OR t.categoryId = :categoryId OR c.parentId = :categoryId)"
+        UNSPLIT_AMOUNTS +
+            "AND (:categoryId IS NULL OR t.categoryId = :categoryId OR c.parentId = :categoryId) " +
+            "UNION ALL " +
+            SPLIT_AMOUNTS +
+            "AND (:categoryId IS NULL OR s.categoryId = :categoryId OR c.parentId = :categoryId)"
     )
     suspend fun amountRows(type: String, fromMillis: Long, toMillis: Long, categoryId: Long?): List<AmountRow>
 

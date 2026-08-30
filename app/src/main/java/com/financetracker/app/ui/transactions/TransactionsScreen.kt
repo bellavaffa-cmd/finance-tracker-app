@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.financetracker.app.data.Money
 import com.financetracker.app.data.category.Category
+import com.financetracker.app.data.tag.Tag
 import com.financetracker.app.data.txn.TxnType
 import com.financetracker.app.ui.common.EmptyState
 import com.financetracker.app.ui.common.OptionPickerDialog
@@ -60,6 +61,7 @@ fun TransactionsScreen(
     var searching by remember { mutableStateOf(false) }
     var showAccountPicker by remember { mutableStateOf(false) }
     var showCategoryPicker by remember { mutableStateOf(false) }
+    var showTagPicker by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         PeriodBar(
@@ -132,6 +134,14 @@ fun TransactionsScreen(
                 selected = state.categoryId != null,
                 onClick = { showCategoryPicker = true }
             )
+            if (state.tags.isNotEmpty()) {
+                FilterChip(
+                    label = state.tags.firstOrNull { it.id == state.tagId }
+                        ?.let { "#" + it.name } ?: "Tag",
+                    selected = state.tagId != null,
+                    onClick = { showTagPicker = true }
+                )
+            }
             if (state.isFiltered) {
                 TextButton(onClick = viewModel::clearFilters) { Text("Clear") }
             }
@@ -175,6 +185,9 @@ fun TransactionsScreen(
                     val detail = day.items[index]
                     TransactionRow(
                         detail = detail,
+                        tags = state.tagsByTransaction[detail.id].orEmpty()
+                            .map { it.name to it.colorArgb },
+                        isSplit = detail.categoryId == null && detail.type != TxnType.TRANSFER,
                         onClick = { onEditTransaction(detail.id) }
                     )
                 }
@@ -195,6 +208,21 @@ fun TransactionsScreen(
                 showAccountPicker = false
             },
             onDismiss = { showAccountPicker = false }
+        )
+    }
+
+    if (showTagPicker) {
+        OptionPickerDialog(
+            title = "Filter by tag",
+            options = state.tags,
+            selected = state.tags.firstOrNull { it.id == state.tagId },
+            label = { tag: Tag -> "#" + tag.name },
+            leadingColor = { it.colorArgb },
+            onSelect = {
+                viewModel.setTag(if (state.tagId == it.id) null else it.id)
+                showTagPicker = false
+            },
+            onDismiss = { showTagPicker = false }
         )
     }
 

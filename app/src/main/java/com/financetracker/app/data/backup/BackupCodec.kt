@@ -9,6 +9,9 @@ import com.financetracker.app.data.recurring.Frequency
 import com.financetracker.app.data.recurring.RecurringRule
 import com.financetracker.app.data.settings.CurrencyRate
 import com.financetracker.app.data.settings.SettingsSnapshot
+import com.financetracker.app.data.tag.Tag
+import com.financetracker.app.data.tag.TxnTag
+import com.financetracker.app.data.txn.TxnSplit
 import com.financetracker.app.data.txn.Transaction
 import com.financetracker.app.data.txn.TxnType
 import org.json.JSONArray
@@ -22,6 +25,9 @@ data class BackupPayload(
     val budgets: List<Budget>,
     val rules: List<RecurringRule>,
     val rates: List<CurrencyRate>,
+    val tags: List<Tag>,
+    val tagLinks: List<TxnTag>,
+    val splits: List<TxnSplit>,
     val settings: SettingsSnapshot
 ) {
     val transactionCount: Int get() = transactions.count { it.deletedAtMillis == null }
@@ -42,7 +48,7 @@ class BackupFormatException(message: String) : Exception(message)
  */
 object BackupCodec {
 
-    const val FORMAT_VERSION = 1
+    const val FORMAT_VERSION = 2
     private const val KEY_FORMAT = "formatVersion"
 
     fun encode(payload: BackupPayload, appVersion: String, nowMillis: Long): String {
@@ -144,6 +150,31 @@ object BackupCodec {
                 put("code", rate.code)
                 put("rateToBase", rate.rateToBase)
                 put("updatedAtMillis", rate.updatedAtMillis)
+            }
+        })
+
+        root.put("tags", payload.tags.jsonArray { tag ->
+            JSONObject().apply {
+                put("id", tag.id)
+                put("name", tag.name)
+                put("colorArgb", tag.colorArgb)
+            }
+        })
+
+        root.put("tagLinks", payload.tagLinks.jsonArray { link ->
+            JSONObject().apply {
+                put("txnId", link.txnId)
+                put("tagId", link.tagId)
+            }
+        })
+
+        root.put("splits", payload.splits.jsonArray { split ->
+            JSONObject().apply {
+                put("id", split.id)
+                put("txnId", split.txnId)
+                putOrNull("categoryId", split.categoryId)
+                put("amountMinor", split.amountMinor)
+                put("note", split.note)
             }
         })
 
@@ -257,6 +288,25 @@ object BackupCodec {
                     code = o.getString("code"),
                     rateToBase = o.optDouble("rateToBase", 1.0),
                     updatedAtMillis = o.optLong("updatedAtMillis", 0)
+                )
+            },
+            tags = root.list("tags") { o ->
+                Tag(
+                    id = o.getLong("id"),
+                    name = o.getString("name"),
+                    colorArgb = o.optInt("colorArgb", DEFAULT_COLOR)
+                )
+            },
+            tagLinks = root.list("tagLinks") { o ->
+                TxnTag(txnId = o.getLong("txnId"), tagId = o.getLong("tagId"))
+            },
+            splits = root.list("splits") { o ->
+                TxnSplit(
+                    id = o.getLong("id"),
+                    txnId = o.getLong("txnId"),
+                    categoryId = o.longOrNull("categoryId"),
+                    amountMinor = o.optLong("amountMinor", 0),
+                    note = o.optString("note", "")
                 )
             },
             settings = settings

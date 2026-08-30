@@ -11,6 +11,9 @@ import com.financetracker.app.data.category.CategoryGroup
 import com.financetracker.app.data.category.CategoryKind
 import com.financetracker.app.data.category.CategoryRepository
 import com.financetracker.app.data.settings.SettingsRepository
+import com.financetracker.app.data.tag.Tag
+import com.financetracker.app.data.tag.TagRepository
+import com.financetracker.app.data.txn.SplitDraft
 import com.financetracker.app.data.txn.Transaction
 import com.financetracker.app.data.txn.TransactionRepository
 import com.financetracker.app.data.txn.TxnType
@@ -42,6 +45,10 @@ data class EntryUiState(
     val categoriesById: Map<Long, Category> = emptyMap(),
     val baseCurrency: String = SettingsRepository.DEFAULT_BASE_CURRENCY,
     val payeeSuggestions: List<String> = emptyList(),
+    /** Two or more legs means this is a split; fewer means the single category above applies. */
+    val splits: List<SplitDraft> = emptyList(),
+    val allTags: List<Tag> = emptyList(),
+    val selectedTagIds: Set<Long> = emptySet(),
     val error: String? = null,
     val saved: Boolean = false,
     val loading: Boolean = true
@@ -63,6 +70,15 @@ data class EntryUiState(
     val needsToAmount: Boolean get() = type == TxnType.TRANSFER && currencyCode != toCurrencyCode
 
     val isEditing: Boolean get() = editingId != null
+
+    val isSplit: Boolean get() = splits.isNotEmpty()
+
+    val splitTotalMinor: Long get() = splits.sumOf { it.amountMinor }
+
+    /** Positive means the legs do not yet account for the whole payment. */
+    val splitRemainderMinor: Long get() = amountMinor - splitTotalMinor
+
+    val splitBalances: Boolean get() = splitRemainderMinor == 0L
 }
 
 /**
@@ -74,7 +90,8 @@ class EntryViewModel(
     private val settings: SettingsRepository,
     private val accounts: AccountRepository,
     private val categories: CategoryRepository,
-    private val transactions: TransactionRepository
+    private val transactions: TransactionRepository,
+    private val tags: TagRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(EntryUiState())
@@ -87,6 +104,7 @@ class EntryViewModel(
             val expense = categories.expenseGroups.first()
             val income = categories.incomeGroups.first()
             val byId = categories.allCategories.first().associateBy { it.id }
+            val tagList = tags.allTags.first()
 
             _state.update { current ->
                 val defaultAccount = current.accountId ?: accountList.firstOrNull()?.id
@@ -95,6 +113,7 @@ class EntryViewModel(
                     expenseGroups = expense,
                     incomeGroups = income,
                     categoriesById = byId,
+                    allTags = tagList,
                     baseCurrency = baseCurrency,
                     accountId = defaultAccount,
                     loading = false
@@ -123,6 +142,101 @@ class EntryViewModel(
                 saved = false,
                 error = null
             )
+        }
+        val splits = transactions.splitsFor(transactionId)
+            .map { SplitDraft(categoryId = it.categoryId, amountMinor = it.amountMinor, note = it.note) }
+        val tagIds = transactions.tagIdsFor(transactionId).toSet()
+        _state.update { it.copy(splits = splits, selectedTagIds = tagIds) }
+    }
+
+    // --- Splits ------------------------------------------------------------------------------
+
+    /**
+     * Starts a split with two legs: the first pre-filled with the whole amount, the second empty.
+     * Splitting is only meaningful for expenses and income - a transfer has no category to divide.
+     */
+    fun startSplit() = _state.update { current ->
+        if (current.type == TxnType.TRANSFER || current.isSplit) return@update current
+        current.copy(
+            splits = listOf(
+                SplitDraft(categoryId = current.categoryId, amountMinor = current.amountMinor),
+                SplitDraft()
+            ),
+            categoryId = null,
+            error = null
+        )
+    }
+
+    /** Collapsing a split keeps the first leg's category, which is the one you chose first. */
+    fun cancelSplit() = _state.update { current ->
+        current.copy(
+            splits = emptyList(),
+            categoryId = current.splits.firstOrNull()?.categoryId ?: current.categoryId,
+            error = null
+        )
+    }
+
+    fun addSplitLeg() = _state.update { current ->
+        if (!current.isSplit) return@update current
+        // The new leg starts with whatever is still unaccounted for, which is almost always what
+        // you want and saves typing the remainder by hand.
+        val remainder = current.splitRemainderMinor.coerceAtLeast(0)
+        current.copy(splits = current.splits + SplitDraft(amountMinor = remainder), error = null)
+    }
+
+    fun removeSplitLeg(index: Int) = _state.update { current ->
+        if (index !in current.splits.indices) return@update current
+        val remaining = current.splits.toMutableList().apply { removeAt(index) }
+        // Dropping to one leg is just a plain categorised transaction again.
+        if (remaining.size < 2) {
+            current.copy(splits = emptyList(), categoryId = remaining.firstOrNull()?.categoryId, error = null)
+        } else {
+            current.copy(splits = remaining, error = null)
+        }
+    }
+
+    fun setSplitCategory(index: Int, categoryId: Long) = updateLeg(index) { it.copy(categoryId = categoryId) }
+
+    fun setSplitAmount(index: Int, amountMinor: Long) =
+        updateLeg(index) { it.copy(amountMinor = amountMinor.coerceAtLeast(0)) }
+
+    fun setSplitNote(index: Int, note: String) = updateLeg(index) { it.copy(note = note) }
+
+    /** Pushes whatever is unaccounted for into one leg, so the split balances in a single tap. */
+    fun absorbRemainder(index: Int) = _state.update { current ->
+        if (index !in current.splits.indices) return@update current
+        val leg = current.splits[index]
+        val corrected = leg.amountMinor + current.splitRemainderMinor
+        if (corrected < 0) return@update current
+        current.copy(
+            splits = current.splits.toMutableList().apply { set(index, leg.copy(amountMinor = corrected)) },
+            error = null
+        )
+    }
+
+    private fun updateLeg(index: Int, transform: (SplitDraft) -> SplitDraft) = _state.update { current ->
+        if (index !in current.splits.indices) return@update current
+        current.copy(
+            splits = current.splits.toMutableList().apply { set(index, transform(get(index))) },
+            error = null
+        )
+    }
+
+    // --- Tags --------------------------------------------------------------------------------
+
+    fun toggleTag(tagId: Long) = _state.update { current ->
+        val next = current.selectedTagIds.toMutableSet()
+        if (!next.add(tagId)) next.remove(tagId)
+        current.copy(selectedTagIds = next, error = null)
+    }
+
+    /** Creates a tag if it does not exist yet and applies it, so tagging never needs a detour. */
+    fun createAndApplyTag(name: String) = viewModelScope.launch {
+        val colour = TAG_PALETTE[(_state.value.allTags.size) % TAG_PALETTE.size]
+        val tag = tags.findOrCreate(name, colour) ?: return@launch
+        val refreshed = tags.all()
+        _state.update {
+            it.copy(allTags = refreshed, selectedTagIds = it.selectedTagIds + tag.id, error = null)
         }
     }
 
@@ -253,7 +367,10 @@ class EntryViewModel(
             dateMillis = current.dateMillis,
             accountId = current.accountId!!,
             toAccountId = if (current.type == TxnType.TRANSFER) current.toAccountId else null,
-            categoryId = if (current.type == TxnType.TRANSFER) null else current.categoryId,
+            // A split transaction carries no category of its own; its legs hold them. Leaving both
+            // set would double-count the payment in every report.
+            categoryId = if (current.type == TxnType.TRANSFER || current.isSplit) null
+            else current.categoryId,
             amountMinor = current.amountMinor,
             toAmountMinor = toAmount,
             fxRateToBase = if (current.type == TxnType.TRANSFER) {
@@ -266,17 +383,21 @@ class EntryViewModel(
             createdAtMillis = System.currentTimeMillis()
         )
 
-        if (current.isEditing) {
+        val toSave = if (current.isEditing) {
             val original = transactions.byId(current.editingId!!)
-            transactions.update(
-                transaction.copy(
-                    createdAtMillis = original?.createdAtMillis ?: transaction.createdAtMillis,
-                    recurringRuleId = original?.recurringRuleId
-                )
+            transaction.copy(
+                createdAtMillis = original?.createdAtMillis ?: transaction.createdAtMillis,
+                recurringRuleId = original?.recurringRuleId
             )
         } else {
-            transactions.insert(transaction)
+            transaction
         }
+
+        transactions.save(
+            transaction = toSave,
+            splits = if (current.type == TxnType.TRANSFER) emptyList() else current.splits,
+            tagIds = current.selectedTagIds.toList()
+        )
         _state.update { it.copy(saved = true, error = null) }
     }
 
@@ -294,20 +415,38 @@ class EntryViewModel(
             "Transfer needs two different accounts"
         state.type == TxnType.TRANSFER && state.needsToAmount && state.toAmountMinor <= 0 ->
             "Enter the amount that arrives"
-        state.type != TxnType.TRANSFER && state.categoryId == null -> "Pick a category"
+        state.type != TxnType.TRANSFER && !state.isSplit && state.categoryId == null -> "Pick a category"
+        state.isSplit && state.splits.any { it.categoryId == null } -> "Give every split a category"
+        state.isSplit && state.splits.any { it.amountMinor <= 0 } -> "Every split needs an amount"
+        // The legs must account for the payment exactly, or the ledger and the reports disagree
+        // about how much was actually spent.
+        state.isSplit && !state.splitBalances -> splitMismatchMessage(state)
         state.needsFxRate && state.fxRateToBase <= 0.0 -> "Exchange rate must be above zero"
         else -> null
     }
 
+    private fun splitMismatchMessage(state: EntryUiState): String {
+        val remainder = state.splitRemainderMinor
+        val amount = Money.format(kotlin.math.abs(remainder), state.currencyCode)
+        return if (remainder > 0) "$amount still unassigned" else "Splits exceed the total by $amount"
+    }
+
     companion object {
         private const val MAX_AMOUNT_MINOR = 1_000_000_000_000L
+
+        /** Colours cycled through when a new tag is created, so tags stay visually distinct. */
+        private val TAG_PALETTE = listOf(
+            0xFF4C8DFF, 0xFF3FBF8F, 0xFFE8A33D, 0xFFE85E7A,
+            0xFF9B7BE8, 0xFF5EC8D8, 0xFFE0C24E, 0xFFD98BC8
+        ).map { it.toInt() }
 
         fun factory(app: FinanceApplication) = FinanceViewModelFactory(app) {
             EntryViewModel(
                 settings = it.settingsRepository,
                 accounts = it.accountRepository,
                 categories = it.categoryRepository,
-                transactions = it.transactionRepository
+                transactions = it.transactionRepository,
+                tags = it.tagRepository
             )
         }
     }

@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.financetracker.app.data.Money
+import com.financetracker.app.data.tag.TagTotal
 import com.financetracker.app.data.txn.TxnType
 import com.financetracker.app.ui.common.CategoryDot
 import com.financetracker.app.ui.common.EmptyState
@@ -116,6 +117,23 @@ fun ReportsScreen(viewModel: ReportsViewModel) {
             for (row in state.breakdown) {
                 item(key = row.categoryId ?: -1L) {
                     BreakdownRow(row, state.baseCurrency, state.direction)
+                }
+            }
+        }
+
+        if (state.tagTotals.isNotEmpty()) {
+            item {
+                SectionCard(title = "By tag") {
+                    Text(
+                        "A transaction can carry several tags, so these can add up to more than " +
+                            "the month's total.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    state.tagTotals.forEach { total ->
+                        TagTotalRow(total, state.baseCurrency, state.totalMinorBase)
+                    }
                 }
             }
         }
@@ -213,6 +231,40 @@ private fun BreakdownRow(row: CategoryBreakdown, baseCurrency: String, direction
             height = 5
         )
         Spacer(Modifier.height(4.dp))
+    }
+}
+
+@Composable
+private fun TagTotalRow(total: TagTotal, baseCurrency: String, periodTotalMinor: Long) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CategoryDot(total.tag.colorArgb, size = 9)
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "#" + total.tag.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    "${total.transactionCount} ${if (total.transactionCount == 1) "entry" else "entries"}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                Money.format(total.amountMinorBase, baseCurrency),
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+        Spacer(Modifier.height(5.dp))
+        ProgressBar(
+            fraction = if (periodTotalMinor <= 0) 0f
+            else total.amountMinorBase.toFloat() / periodTotalMinor.toFloat(),
+            color = Color(total.tag.colorArgb),
+            height = 4
+        )
     }
 }
 

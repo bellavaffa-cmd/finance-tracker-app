@@ -11,6 +11,7 @@ import com.financetracker.app.data.category.CategoryRepository
 import com.financetracker.app.data.category.DefaultCategories
 import com.financetracker.app.data.recurring.RecurringRepository
 import com.financetracker.app.data.settings.SettingsRepository
+import com.financetracker.app.data.tag.TagRepository
 import com.financetracker.app.data.txn.TransactionRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,8 +29,14 @@ class FinanceApplication : Application() {
     }
     val categoryRepository: CategoryRepository by lazy { CategoryRepository(database.categoryDao()) }
     val transactionRepository: TransactionRepository by lazy {
-        TransactionRepository(database.transactionDao())
+        TransactionRepository(
+            database = database,
+            dao = database.transactionDao(),
+            splitDao = database.splitDao(),
+            tagDao = database.tagDao()
+        )
     }
+    val tagRepository: TagRepository by lazy { TagRepository(database.tagDao()) }
     val budgetRepository: BudgetRepository by lazy {
         BudgetRepository(database.budgetDao(), transactionRepository)
     }

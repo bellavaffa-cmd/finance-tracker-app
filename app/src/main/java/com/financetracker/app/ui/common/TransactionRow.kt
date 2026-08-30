@@ -1,7 +1,9 @@
 package com.financetracker.app.ui.common
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -18,6 +21,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -37,6 +42,8 @@ fun TransactionRow(
     detail: TransactionDetail,
     modifier: Modifier = Modifier,
     showDate: Boolean = false,
+    tags: List<Pair<String, Int>> = emptyList(),
+    isSplit: Boolean = false,
     onClick: (() -> Unit)? = null
 ) {
     Row(
@@ -62,7 +69,7 @@ fun TransactionRow(
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    primaryLabel(detail),
+                    primaryLabel(detail, isSplit),
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -80,12 +87,40 @@ fun TransactionRow(
             }
             Spacer(Modifier.height(2.dp))
             Text(
-                secondaryLabel(detail, showDate),
+                secondaryLabel(detail, showDate, isSplit),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            if (tags.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // Three is what fits before the amount starts getting crowded; the rest are
+                    // summarised rather than wrapping the row onto a second line.
+                    tags.take(3).forEach { (name, colorArgb) ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(colorArgb).copy(alpha = 0.20f))
+                                .padding(horizontal = 6.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                "#" + name,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(colorArgb)
+                            )
+                        }
+                    }
+                    if (tags.size > 3) {
+                        Text(
+                            "+" + (tags.size - 3),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
         }
 
         Spacer(Modifier.width(12.dp))
@@ -115,21 +150,29 @@ fun TransactionRow(
     }
 }
 
-private fun primaryLabel(detail: TransactionDetail): String = when {
+private fun primaryLabel(detail: TransactionDetail, isSplit: Boolean): String = when {
     detail.payee.isNotBlank() -> detail.payee
     detail.type == TxnType.TRANSFER -> "${detail.accountName} to ${detail.toAccountName.orEmpty()}"
     detail.categoryName != null -> detail.categoryName
+    // A split legitimately has no category of its own, so it must not be labelled the same way as
+    // an entry the user forgot to categorise.
+    isSplit -> "Split payment"
     else -> "Uncategorised"
 }
 
-private fun secondaryLabel(detail: TransactionDetail, showDate: Boolean): String {
+private fun secondaryLabel(detail: TransactionDetail, showDate: Boolean, isSplit: Boolean): String {
     val parts = mutableListOf<String>()
     if (showDate) parts += shortDate(detail.dateMillis)
     when (detail.type) {
         TxnType.TRANSFER -> parts += "${detail.accountName} to ${detail.toAccountName.orEmpty()}"
         else -> {
-            val category = detail.parentCategoryName?.let { "$it / ${detail.categoryName}" }
-                ?: detail.categoryName ?: "Uncategorised"
+            // A split has no single category of its own, so say so rather than "Uncategorised",
+            // which would read like a mistake the user needs to fix.
+            val category = when {
+                isSplit -> "Split"
+                detail.parentCategoryName != null -> "${detail.parentCategoryName} / ${detail.categoryName}"
+                else -> detail.categoryName ?: "Uncategorised"
+            }
             parts += category
             parts += detail.accountName
         }
