@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CreditCard
@@ -57,7 +58,8 @@ fun SettingsScreen(
     onOpenRecurring: () -> Unit,
     onOpenData: () -> Unit,
     onOpenGoals: () -> Unit,
-    onOpenDebts: () -> Unit
+    onOpenDebts: () -> Unit,
+    onOpenRules: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
     var showCurrencyPicker by remember { mutableStateOf(false) }
@@ -107,6 +109,12 @@ fun SettingsScreen(
                         "Payoff projections and strategies",
                         Icons.Filled.CreditCard,
                         onOpenDebts
+                    )
+                    NavRow(
+                        "Auto-categorise",
+                        "Rules that fill in the category by payee",
+                        Icons.Filled.AutoFixHigh,
+                        onOpenRules
                     )
                     NavRow(
                         "Data & security",

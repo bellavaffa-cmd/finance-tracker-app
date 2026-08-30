@@ -51,6 +51,13 @@ all** — there is no server, no sync, and no telemetry. Everything lives in a d
 - Snowball vs avalanche compared side by side on your actual numbers, including what the difference
   costs in interest and months
 
+**Auto-categorise**
+- Rules that fill in the category when a payee matches: contains / starts with / is exactly
+- Applied as you enter a transaction, on every row of a CSV import, and retroactively to entries
+  that have no category yet
+- Can also tidy a messy bank description into one consistent payee name
+- Suggests rules from payees you have already filed the same way several times
+
 **Data & security**
 - Full JSON backup, and restore from one — everything, including preferences
 - CSV export of the ledger for a spreadsheet, with amounts in both the account's own currency and
@@ -88,6 +95,13 @@ A few decisions that are load-bearing:
   transaction, so a failure part-way leaves the existing data untouched.
 - **The app never stores a PIN of its own.** The lock delegates to the OS keyguard through
   BiometricPrompt, so the secret never reaches this process.
+- **Rules are plain matches, not regular expressions.** A regex that backtracks badly can hang
+  the entry screen and a wrong one fails invisibly; three match types cover essentially every
+  merchant string without either risk. The first match wins, ordered by priority and then by
+  pattern length, so a specific rule is never shadowed by a vaguer one written later.
+- **A rule never overwrites a decision you made.** It only fills a category that is empty -
+  on entry, on import, and in the retroactive pass. A category named in a CSV always beats a
+  rule, because that is your own statement about the row.
 - **The CSV importer never guesses silently.** Where a date could be read either way round it
   says so before anything is written; rows it cannot read are listed by line number with a
   reason rather than dropped; and transfers are reported as unimportable, because one CSV row

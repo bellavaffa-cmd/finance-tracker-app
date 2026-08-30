@@ -10,6 +10,8 @@ import com.financetracker.app.data.debt.DebtKind
 import com.financetracker.app.data.goal.Goal
 import com.financetracker.app.data.recurring.Frequency
 import com.financetracker.app.data.recurring.RecurringRule
+import com.financetracker.app.data.rules.MatchType
+import com.financetracker.app.data.rules.PayeeRule
 import com.financetracker.app.data.settings.CurrencyRate
 import com.financetracker.app.data.settings.SettingsSnapshot
 import com.financetracker.app.data.tag.Tag
@@ -33,6 +35,7 @@ data class BackupPayload(
     val splits: List<TxnSplit>,
     val goals: List<Goal>,
     val debts: List<Debt>,
+    val payeeRules: List<PayeeRule>,
     val settings: SettingsSnapshot
 ) {
     val transactionCount: Int get() = transactions.count { it.deletedAtMillis == null }
@@ -53,7 +56,7 @@ class BackupFormatException(message: String) : Exception(message)
  */
 object BackupCodec {
 
-    const val FORMAT_VERSION = 3
+    const val FORMAT_VERSION = 4
     private const val KEY_FORMAT = "formatVersion"
 
     fun encode(payload: BackupPayload, appVersion: String, nowMillis: Long): String {
@@ -214,6 +217,20 @@ object BackupCodec {
             }
         })
 
+        root.put("payeeRules", payload.payeeRules.jsonArray { rule ->
+            JSONObject().apply {
+                put("id", rule.id)
+                put("pattern", rule.pattern)
+                put("matchType", rule.matchType.name)
+                putOrNull("categoryId", rule.categoryId)
+                putOrNull("accountId", rule.accountId)
+                put("renameTo", rule.renameTo ?: JSONObject.NULL)
+                put("priority", rule.priority)
+                put("isActive", rule.isActive)
+                put("createdAtMillis", rule.createdAtMillis)
+            }
+        })
+
         return root.toString(2)
     }
 
@@ -370,6 +387,19 @@ object BackupCodec {
                     minimumPaymentMinor = o.optLong("minimumPaymentMinor", 0),
                     colorArgb = o.optInt("colorArgb", DEFAULT_COLOR),
                     note = o.optString("note", ""),
+                    isActive = o.optBoolean("isActive", true),
+                    createdAtMillis = o.optLong("createdAtMillis", 0)
+                )
+            },
+            payeeRules = root.list("payeeRules") { o ->
+                PayeeRule(
+                    id = o.getLong("id"),
+                    pattern = o.optString("pattern", ""),
+                    matchType = enumOf(o.optString("matchType"), MatchType.CONTAINS),
+                    categoryId = o.longOrNull("categoryId"),
+                    accountId = o.longOrNull("accountId"),
+                    renameTo = if (o.isNull("renameTo")) null else o.optString("renameTo").ifBlank { null },
+                    priority = o.optInt("priority", 0),
                     isActive = o.optBoolean("isActive", true),
                     createdAtMillis = o.optLong("createdAtMillis", 0)
                 )

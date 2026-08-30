@@ -5,6 +5,7 @@ import com.financetracker.app.data.account.AccountType
 import com.financetracker.app.data.category.CategoryKind
 import com.financetracker.app.data.debt.DebtKind
 import com.financetracker.app.data.recurring.Frequency
+import com.financetracker.app.data.rules.MatchType
 import com.financetracker.app.data.txn.TxnType
 
 /**
@@ -28,4 +29,7 @@ class Converters {
 
     @TypeConverter fun debtKindToString(value: DebtKind): String = value.name
     @TypeConverter fun stringToDebtKind(value: String): DebtKind = DebtKind.valueOf(value)
+
+    @TypeConverter fun matchTypeToString(value: MatchType): String = value.name
+    @TypeConverter fun stringToMatchType(value: String): MatchType = MatchType.valueOf(value)
 }

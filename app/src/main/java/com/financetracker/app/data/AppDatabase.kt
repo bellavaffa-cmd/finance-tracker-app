@@ -18,6 +18,8 @@ import com.financetracker.app.data.debt.DebtDao
 import com.financetracker.app.data.goal.Goal
 import com.financetracker.app.data.goal.GoalDao
 import com.financetracker.app.data.recurring.RecurringDao
+import com.financetracker.app.data.rules.PayeeRule
+import com.financetracker.app.data.rules.PayeeRuleDao
 import com.financetracker.app.data.recurring.RecurringRule
 import com.financetracker.app.data.settings.CurrencyRate
 import com.financetracker.app.data.settings.CurrencyRateDao
@@ -111,6 +113,26 @@ private val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+/** Adds payee auto-categorisation rules. One new table, nothing existing touched. */
+private val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `payee_rule` (" +
+                "`id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, " +
+                "`pattern` TEXT NOT NULL, " +
+                "`matchType` TEXT NOT NULL, " +
+                "`categoryId` INTEGER, " +
+                "`accountId` INTEGER, " +
+                "`renameTo` TEXT, " +
+                "`priority` INTEGER NOT NULL, " +
+                "`isActive` INTEGER NOT NULL, " +
+                "`createdAtMillis` INTEGER NOT NULL)"
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_payee_rule_isActive` ON `payee_rule` (`isActive`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_payee_rule_priority` ON `payee_rule` (`priority`)")
+    }
+}
+
 @Database(
     entities = [
         Account::class,
@@ -123,9 +145,10 @@ private val MIGRATION_2_3 = object : Migration(2, 3) {
         TxnTag::class,
         TxnSplit::class,
         Goal::class,
-        Debt::class
+        Debt::class,
+        PayeeRule::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -141,6 +164,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun splitDao(): SplitDao
     abstract fun goalDao(): GoalDao
     abstract fun debtDao(): DebtDao
+    abstract fun payeeRuleDao(): PayeeRuleDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -152,7 +176,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "finance-tracker.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { INSTANCE = it }
             }

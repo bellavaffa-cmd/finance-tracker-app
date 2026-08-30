@@ -12,6 +12,7 @@ import com.financetracker.app.data.category.DefaultCategories
 import com.financetracker.app.data.debt.DebtRepository
 import com.financetracker.app.data.goal.GoalRepository
 import com.financetracker.app.data.importer.ImportRepository
+import com.financetracker.app.data.rules.PayeeRuleRepository
 import com.financetracker.app.data.recurring.RecurringRepository
 import com.financetracker.app.data.settings.SettingsRepository
 import com.financetracker.app.data.tag.TagRepository
@@ -61,6 +62,10 @@ class FinanceApplication : Application() {
             settings = settingsRepository,
             appVersion = BuildConfig.VERSION_NAME
         )
+    }
+
+    val payeeRuleRepository: PayeeRuleRepository by lazy {
+        PayeeRuleRepository(database, database.payeeRuleDao())
     }
 
     val importRepository: ImportRepository by lazy {

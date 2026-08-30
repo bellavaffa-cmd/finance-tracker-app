@@ -10,6 +10,8 @@ import com.financetracker.app.data.category.Category
 import com.financetracker.app.data.category.CategoryGroup
 import com.financetracker.app.data.category.CategoryKind
 import com.financetracker.app.data.category.CategoryRepository
+import com.financetracker.app.data.rules.PayeeRuleEngine
+import com.financetracker.app.data.rules.PayeeRuleRepository
 import com.financetracker.app.data.settings.SettingsRepository
 import com.financetracker.app.data.tag.Tag
 import com.financetracker.app.data.tag.TagRepository
@@ -91,7 +93,8 @@ class EntryViewModel(
     private val accounts: AccountRepository,
     private val categories: CategoryRepository,
     private val transactions: TransactionRepository,
-    private val tags: TagRepository
+    private val tags: TagRepository,
+    private val rules: PayeeRuleRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(EntryUiState())
@@ -312,18 +315,35 @@ class EntryViewModel(
 
     fun applyPayee(payee: String) {
         _state.update { it.copy(payee = payee, payeeSuggestions = emptyList()) }
-        viewModelScope.launch {
-            val remembered = transactions.lastCategoryForPayee(payee) ?: return@launch
-            _state.update { current ->
-                val kind = current.categoriesById[remembered]?.kind
-                val matchesDirection = when (current.type) {
-                    TxnType.EXPENSE -> kind == CategoryKind.EXPENSE
-                    TxnType.INCOME -> kind == CategoryKind.INCOME
-                    TxnType.TRANSFER -> false
-                }
-                if (current.categoryId == null && matchesDirection) current.copy(categoryId = remembered)
-                else current
+        viewModelScope.launch { autoFillFrom(payee) }
+    }
+
+    /**
+     * Fills in what the payee implies. An explicit rule wins over "what you did last time" -
+     * a rule is a standing decision, whereas history is only a guess about one.
+     *
+     * Neither ever overwrites a category already chosen by hand on this entry.
+     */
+    private suspend fun autoFillFrom(payee: String) {
+        if (payee.isBlank()) return
+        val outcome = PayeeRuleEngine.apply(rules.active(), payee)
+        val suggested = outcome?.categoryId ?: transactions.lastCategoryForPayee(payee) ?: return
+
+        _state.update { current ->
+            val kind = current.categoriesById[suggested]?.kind
+            val matchesDirection = when (current.type) {
+                TxnType.EXPENSE -> kind == CategoryKind.EXPENSE
+                TxnType.INCOME -> kind == CategoryKind.INCOME
+                TxnType.TRANSFER -> false
             }
+            current.copy(
+                categoryId = if (current.categoryId == null && matchesDirection) suggested
+                else current.categoryId,
+                // A rule that tidies "CARD PURCHASE LIDL 4432" into "Lidl" should do so here too,
+                // or the ledger keeps the messy name the rule exists to replace.
+                payee = outcome?.payee ?: current.payee,
+                accountId = outcome?.accountId ?: current.accountId
+            )
         }
     }
 
@@ -347,6 +367,14 @@ class EntryViewModel(
     }
 
     fun save() = viewModelScope.launch {
+        // Rules must also fire for a payee that was typed out rather than picked from a
+        // suggestion - otherwise the feature only works for people who happen to tap the chip.
+        if (_state.value.categoryId == null && !_state.value.isSplit &&
+            _state.value.type != TxnType.TRANSFER
+        ) {
+            autoFillFrom(_state.value.payee)
+        }
+
         val current = _state.value
         val error = validate(current)
         if (error != null) {
@@ -446,7 +474,8 @@ class EntryViewModel(
                 accounts = it.accountRepository,
                 categories = it.categoryRepository,
                 transactions = it.transactionRepository,
-                tags = it.tagRepository
+                tags = it.tagRepository,
+                rules = it.payeeRuleRepository
             )
         }
     }

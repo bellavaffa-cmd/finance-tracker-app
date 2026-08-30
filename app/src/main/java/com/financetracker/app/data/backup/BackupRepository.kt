@@ -87,6 +87,7 @@ class BackupRepository(
             database.currencyRateDao().clear()
             database.goalDao().clear()
             database.debtDao().clear()
+            database.payeeRuleDao().clear()
 
             database.accountDao().insertAll(payload.accounts)
             database.categoryDao().insertAll(payload.categories)
@@ -100,6 +101,7 @@ class BackupRepository(
             database.splitDao().insertAll(payload.splits)
             database.goalDao().insertAll(payload.goals)
             database.debtDao().insertAll(payload.debts)
+            database.payeeRuleDao().insertAll(payload.payeeRules)
         }
         settings.restore(payload.settings)
 
@@ -134,6 +136,7 @@ class BackupRepository(
         splits = database.splitDao().all(),
         goals = database.goalDao().all(),
         debts = database.debtDao().all(),
+        payeeRules = database.payeeRuleDao().all(),
         settings = settings.snapshot()
     )
 

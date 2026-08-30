@@ -37,6 +37,8 @@ import com.financetracker.app.ui.entry.EntryViewModel
 import com.financetracker.app.ui.home.HomeScreen
 import com.financetracker.app.ui.home.HomeViewModel
 import com.financetracker.app.ui.recurring.RecurringScreen
+import com.financetracker.app.ui.rules.RulesScreen
+import com.financetracker.app.ui.rules.RulesViewModel
 import com.financetracker.app.ui.reports.ReportsScreen
 import com.financetracker.app.ui.reports.ReportsViewModel
 import com.financetracker.app.ui.settings.DataScreen
@@ -131,7 +133,8 @@ fun FinanceNavHost(application: FinanceApplication) {
                     onOpenRecurring = { navController.navigate(Routes.RECURRING) },
                     onOpenData = { navController.navigate(Routes.DATA) },
                     onOpenGoals = { navController.navigate(Routes.GOALS) },
-                    onOpenDebts = { navController.navigate(Routes.DEBTS) }
+                    onOpenDebts = { navController.navigate(Routes.DEBTS) },
+                    onOpenRules = { navController.navigate(Routes.RULES) }
                 )
             }
 
@@ -167,6 +170,12 @@ fun FinanceNavHost(application: FinanceApplication) {
                     onBack = { navController.popBackStack() },
                     onOpenImport = { navController.navigate(Routes.IMPORT) }
                 )
+            }
+
+            composable(Routes.RULES) {
+                val rulesViewModel: RulesViewModel =
+                    viewModel(factory = RulesViewModel.factory(application))
+                RulesScreen(viewModel = rulesViewModel, onBack = { navController.popBackStack() })
             }
 
             composable(Routes.IMPORT) {

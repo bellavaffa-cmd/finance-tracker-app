@@ -8,6 +8,7 @@ import com.financetracker.app.data.account.Account
 import com.financetracker.app.data.account.AccountType
 import com.financetracker.app.data.category.Category
 import com.financetracker.app.data.category.CategoryKind
+import com.financetracker.app.data.rules.PayeeRuleEngine
 import com.financetracker.app.data.settings.SettingsRepository
 import com.financetracker.app.data.txn.Transaction
 import com.financetracker.app.data.txn.TxnType
@@ -20,7 +21,8 @@ data class ImportResult(
     val duplicatesSkipped: Int,
     val rowsSkipped: Int,
     val accountsCreated: Int,
-    val categoriesCreated: Int
+    val categoriesCreated: Int,
+    val autoCategorised: Int = 0
 )
 
 /** The file as read, before any mapping decisions are applied. */
@@ -68,9 +70,12 @@ class ImportRepository(
         rows: List<ParsedRow.Usable>,
         defaultAccountId: Long,
         createMissing: Boolean,
-        skipDuplicates: Boolean
+        skipDuplicates: Boolean,
+        applyRules: Boolean = true
     ): ImportResult = withContext(Dispatchers.IO) {
         val baseCurrency = settings.currentBaseCurrency()
+        // Bank exports arrive as raw merchant strings, which is exactly what the rules exist for.
+        val rules = if (applyRules) database.payeeRuleDao().active() else emptyList()
 
         database.withTransaction {
             val accountDao = database.accountDao()
@@ -86,6 +91,7 @@ class ImportRepository(
             var createdCategories = 0
             var duplicates = 0
             var imported = 0
+            var autoCategorised = 0
 
             // Existing entries are fingerprinted once rather than queried per row, which keeps a
             // few thousand imported rows from becoming a few thousand round-trips.
@@ -97,7 +103,14 @@ class ImportRepository(
                 mutableSetOf()
             }
 
-            for (row in rows) {
+            for (raw in rows) {
+                val outcome = if (rules.isEmpty()) null else PayeeRuleEngine.apply(rules, raw.payee)
+                // A category named in the file is the user's own statement about that row, so it
+                // wins; a rule only fills the gap when the file said nothing.
+                val row = if (outcome == null) raw else raw.copy(
+                    payee = outcome.payee ?: raw.payee,
+                    categoryName = raw.categoryName
+                )
                 val accountName = row.accountName?.lowercase()
                 val account = when {
                     accountName == null -> defaultAccount
@@ -123,11 +136,13 @@ class ImportRepository(
 
                 val categoryName = row.categoryName?.lowercase()
                 val categoryId = when {
-                    categoryName == null -> null
-                    categoriesByName.containsKey(categoryName) -> categoriesByName.getValue(categoryName).id
-                    createMissing -> {
+                    // A category named in the file is the user's own statement about that row.
+                    categoryName != null && categoriesByName.containsKey(categoryName) ->
+                        categoriesByName.getValue(categoryName).id
+
+                    categoryName != null && createMissing -> {
                         val created = Category(
-                            name = row.categoryName.trim(),
+                            name = row.categoryName!!.trim(),
                             kind = if (row.type == TxnType.INCOME) CategoryKind.INCOME else CategoryKind.EXPENSE,
                             parentId = null,
                             colorArgb = IMPORT_COLOR,
@@ -138,6 +153,12 @@ class ImportRepository(
                         categoriesByName[categoryName] = created.copy(id = id)
                         id
                     }
+
+                    // The file said nothing useful, so the rules get their turn. This is the whole
+                    // point of them: a bank export has no category column at all, and without this
+                    // branch the rules would never fire on the files they exist to categorise.
+                    outcome?.categoryId != null -> outcome.categoryId.also { autoCategorised++ }
+
                     else -> null
                 }
 
@@ -172,7 +193,8 @@ class ImportRepository(
                 duplicatesSkipped = duplicates,
                 rowsSkipped = 0,
                 accountsCreated = createdAccounts,
-                categoriesCreated = createdCategories
+                categoriesCreated = createdCategories,
+                autoCategorised = autoCategorised
             )
         }
     }
