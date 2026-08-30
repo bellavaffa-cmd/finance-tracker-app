@@ -113,11 +113,18 @@ fun DataScreen(
                     Spacer(Modifier.height(8.dp))
                     ActionRow(
                         label = "Save a backup",
-                        supporting = "Everything, in one JSON file you can restore from",
+                        supporting = "Everything except receipt images, in one JSON file",
                         icon = Icons.Filled.Save,
                         enabled = !state.busy
                     ) { backupLauncher.launch(BackupRepository.backupFileName()) }
 
+                    Text(
+                        "Receipt photos stay on the device - embedding them would turn a small " +
+                            "text file into hundreds of megabytes. They are covered by Android's " +
+                            "own app backup instead.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     ActionRow(
                         label = "Export to CSV",
                         supporting = "Transactions for a spreadsheet. Not restorable — use a backup for that",

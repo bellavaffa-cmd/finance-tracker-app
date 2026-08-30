@@ -133,6 +133,16 @@ private val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
+/**
+ * Adds a receipt image reference to each transaction. A nullable column, so existing rows simply
+ * carry NULL and nothing needs rewriting.
+ */
+private val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `txn` ADD COLUMN `attachmentName` TEXT")
+    }
+}
+
 @Database(
     entities = [
         Account::class,
@@ -148,7 +158,7 @@ private val MIGRATION_3_4 = object : Migration(3, 4) {
         Debt::class,
         PayeeRule::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -176,7 +186,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "finance-tracker.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { INSTANCE = it }
             }

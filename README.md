@@ -57,6 +57,13 @@ all** — there is no server, no sync, and no telemetry. Everything lives in a d
 - Snowball vs avalanche compared side by side on your actual numbers, including what the difference
   costs in interest and months
 
+**Receipts**
+- Attach a photo or an image file to any transaction, view it full size, replace or remove it
+- Images are downscaled on the way in — a 3000×4000 camera photo lands at around 18 KB and stays
+  perfectly readable
+- **No camera permission.** Photos go through the system camera app via `ACTION_IMAGE_CAPTURE`,
+  which needs no grant as long as the app does not declare one
+
 **Auto-categorise**
 - Rules that fill in the category when a payee matches: contains / starts with / is exactly
 - Applied as you enter a transaction, on every row of a CSV import, and retroactively to entries
@@ -101,6 +108,10 @@ A few decisions that are load-bearing:
   transaction, so a failure part-way leaves the existing data untouched.
 - **The app never stores a PIN of its own.** The lock delegates to the OS keyguard through
   BiometricPrompt, so the secret never reaches this process.
+- **Receipts live in app-private storage and are not in the JSON backup.** Embedding them
+  would turn a small text file into hundreds of megabytes of base64; Android's own app
+  backup covers the image files instead. The backup carries the file name, and a restore
+  sweeps up images the new ledger no longer references.
 - **Rules are plain matches, not regular expressions.** A regex that backtracks badly can hang
   the entry screen and a wrong one fails invisibly; three match types cover essentially every
   merchant string without either risk. The first match wins, ordered by priority and then by

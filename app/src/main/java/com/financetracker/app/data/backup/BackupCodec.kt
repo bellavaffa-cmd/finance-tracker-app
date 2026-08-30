@@ -56,7 +56,7 @@ class BackupFormatException(message: String) : Exception(message)
  */
 object BackupCodec {
 
-    const val FORMAT_VERSION = 4
+    const val FORMAT_VERSION = 5
     private const val KEY_FORMAT = "formatVersion"
 
     fun encode(payload: BackupPayload, appVersion: String, nowMillis: Long): String {
@@ -115,6 +115,9 @@ object BackupCodec {
                 put("note", txn.note)
                 putOrNull("recurringRuleId", txn.recurringRuleId)
                 put("createdAtMillis", txn.createdAtMillis)
+                // The file name only. Embedding the images would turn a small text backup into
+                // hundreds of megabytes of base64.
+                put("attachmentName", txn.attachmentName ?: JSONObject.NULL)
                 putOrNull("deletedAtMillis", txn.deletedAtMillis)
             }
         })
@@ -301,6 +304,8 @@ object BackupCodec {
                     note = o.optString("note", ""),
                     recurringRuleId = o.longOrNull("recurringRuleId"),
                     createdAtMillis = o.optLong("createdAtMillis", o.getLong("dateMillis")),
+                    attachmentName = if (o.isNull("attachmentName")) null
+                    else o.optString("attachmentName").ifBlank { null },
                     deletedAtMillis = o.longOrNull("deletedAtMillis")
                 )
             },

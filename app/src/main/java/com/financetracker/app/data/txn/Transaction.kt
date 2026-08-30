@@ -48,6 +48,11 @@ data class Transaction(
     /** Set when this entry was posted from a recurring rule. */
     val recurringRuleId: Long? = null,
     val createdAtMillis: Long,
+    /**
+     * File name of a receipt image in app-private storage. A bare name, never an absolute path -
+     * `filesDir` moves between installs and across a device restore.
+     */
+    val attachmentName: String? = null,
     /** Soft delete: rows stay so historical reports remain reproducible. */
     val deletedAtMillis: Long? = null
 )
@@ -72,7 +77,8 @@ data class TransactionDetail(
     val categoryName: String?,
     val categoryColorArgb: Int?,
     val parentCategoryName: String?,
-    val recurringRuleId: Long?
+    val recurringRuleId: Long?,
+    val attachmentName: String?
 )
 
 /**

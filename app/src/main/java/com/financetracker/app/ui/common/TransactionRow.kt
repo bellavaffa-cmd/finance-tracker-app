@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Icon
@@ -82,6 +83,15 @@ fun TransactionRow(
                         contentDescription = "From a recurring rule",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.width(14.dp)
+                    )
+                }
+                if (detail.attachmentName != null) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        Icons.Filled.AttachFile,
+                        contentDescription = "Has a receipt",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.width(13.dp)
                     )
                 }
             }

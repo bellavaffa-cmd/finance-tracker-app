@@ -15,7 +15,7 @@ private const val DETAIL_SELECT = "SELECT t.id, t.type, t.dateMillis, t.amountMi
     "t.accountId, a.name AS accountName, a.currencyCode AS accountCurrency, " +
     "t.toAccountId, b.name AS toAccountName, b.currencyCode AS toAccountCurrency, " +
     "t.categoryId, c.name AS categoryName, c.colorArgb AS categoryColorArgb, " +
-    "p.name AS parentCategoryName, t.recurringRuleId " +
+    "p.name AS parentCategoryName, t.recurringRuleId, t.attachmentName " +
     "FROM txn t " +
     "JOIN account a ON a.id = t.accountId " +
     "LEFT JOIN account b ON b.id = t.toAccountId " +
@@ -222,6 +222,10 @@ interface TransactionDao {
 
     @Query("SELECT MIN(dateMillis) FROM txn WHERE deletedAtMillis IS NULL")
     suspend fun earliestDateMillis(): Long?
+
+    /** Every receipt still referenced by a row, so orphaned image files can be swept up. */
+    @Query("SELECT attachmentName FROM txn WHERE attachmentName IS NOT NULL")
+    suspend fun referencedAttachments(): List<String>
 
     // --- Backup, restore and export -----------------------------------------------------------
 

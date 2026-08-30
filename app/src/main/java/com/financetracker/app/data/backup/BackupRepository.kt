@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
 import com.financetracker.app.data.AppDatabase
+import com.financetracker.app.data.attachment.AttachmentStore
 import com.financetracker.app.data.settings.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,6 +29,7 @@ class BackupRepository(
     private val context: Context,
     private val database: AppDatabase,
     private val settings: SettingsRepository,
+    private val attachments: AttachmentStore,
     private val appVersion: String
 ) {
 
@@ -104,6 +106,10 @@ class BackupRepository(
             database.payeeRuleDao().insertAll(payload.payeeRules)
         }
         settings.restore(payload.settings)
+
+        // A restore swaps out the whole ledger, which is the one moment receipt images can be left
+        // with nothing pointing at them. Anything the new ledger does not reference is swept up.
+        attachments.pruneOrphans(database.transactionDao().referencedAttachments().toSet())
 
         RestoreSummary(
             accounts = payload.accounts.size,

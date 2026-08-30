@@ -1,11 +1,14 @@
 package com.financetracker.app.ui.entry
 
+import android.net.Uri
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.financetracker.app.FinanceApplication
 import com.financetracker.app.data.Money
 import com.financetracker.app.data.account.AccountRepository
 import com.financetracker.app.data.account.AccountWithBalance
+import com.financetracker.app.data.attachment.AttachmentStore
 import com.financetracker.app.data.category.Category
 import com.financetracker.app.data.category.CategoryGroup
 import com.financetracker.app.data.category.CategoryKind
@@ -51,6 +54,9 @@ data class EntryUiState(
     val splits: List<SplitDraft> = emptyList(),
     val allTags: List<Tag> = emptyList(),
     val selectedTagIds: Set<Long> = emptySet(),
+    /** File name of the attached receipt, if there is one. */
+    val attachmentName: String? = null,
+    val attaching: Boolean = false,
     val error: String? = null,
     val saved: Boolean = false,
     val loading: Boolean = true
@@ -94,7 +100,8 @@ class EntryViewModel(
     private val categories: CategoryRepository,
     private val transactions: TransactionRepository,
     private val tags: TagRepository,
-    private val rules: PayeeRuleRepository
+    private val rules: PayeeRuleRepository,
+    private val attachments: AttachmentStore
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(EntryUiState())
@@ -142,6 +149,7 @@ class EntryViewModel(
                 payee = existing.payee,
                 note = existing.note,
                 fxRateToBase = existing.fxRateToBase,
+                attachmentName = existing.attachmentName,
                 saved = false,
                 error = null
             )
@@ -224,6 +232,52 @@ class EntryViewModel(
             error = null
         )
     }
+
+    // --- Receipt -----------------------------------------------------------------------------
+
+    fun attachFrom(uri: Uri) = viewModelScope.launch {
+        _state.update { it.copy(attaching = true) }
+        val stored = attachments.importFrom(uri)
+        applyAttachment(stored)
+    }
+
+    fun attachCapture(file: java.io.File) = viewModelScope.launch {
+        _state.update { it.copy(attaching = true) }
+        val stored = attachments.importFrom(file)
+        applyAttachment(stored)
+    }
+
+    /**
+     * Replacing a receipt deletes the previous image straight away. The transaction is the only
+     * thing that ever points at it, so leaving it behind would just accumulate dead files.
+     */
+    private fun applyAttachment(stored: String?) {
+        val previous = _state.value.attachmentName
+        _state.update {
+            it.copy(
+                attaching = false,
+                attachmentName = stored ?: it.attachmentName,
+                error = if (stored == null) "That image could not be read." else it.error
+            )
+        }
+        if (stored != null && previous != null && previous != stored) {
+            viewModelScope.launch { attachments.delete(previous) }
+        }
+    }
+
+    fun removeAttachment() {
+        val current = _state.value.attachmentName ?: return
+        _state.update { it.copy(attachmentName = null) }
+        // Only drop the file once the row is saved without it; until then the edit is undoable by
+        // simply backing out, and deleting now would destroy a receipt the user still has.
+        pendingDeletion = current
+    }
+
+    private var pendingDeletion: String? = null
+
+    fun cameraTarget(): Pair<java.io.File, Uri> = attachments.newCameraTarget()
+
+    fun attachmentUri(name: String): Uri? = attachments.uriFor(name)
 
     // --- Tags --------------------------------------------------------------------------------
 
@@ -408,6 +462,7 @@ class EntryViewModel(
             },
             payee = current.payee.trim(),
             note = current.note.trim(),
+            attachmentName = current.attachmentName,
             createdAtMillis = System.currentTimeMillis()
         )
 
@@ -426,6 +481,11 @@ class EntryViewModel(
             splits = if (current.type == TxnType.TRANSFER) emptyList() else current.splits,
             tagIds = current.selectedTagIds.toList()
         )
+        // The removal is only made permanent once the row without it is actually written.
+        pendingDeletion?.let { orphan ->
+            if (orphan != current.attachmentName) attachments.delete(orphan)
+            pendingDeletion = null
+        }
         _state.update { it.copy(saved = true, error = null) }
     }
 
@@ -475,7 +535,8 @@ class EntryViewModel(
                 categories = it.categoryRepository,
                 transactions = it.transactionRepository,
                 tags = it.tagRepository,
-                rules = it.payeeRuleRepository
+                rules = it.payeeRuleRepository,
+                attachments = it.attachmentStore
             )
         }
     }

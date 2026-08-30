@@ -225,6 +225,17 @@ fun EntryScreen(
             )
 
             Spacer(Modifier.height(16.dp))
+            ReceiptSection(
+                attachmentName = state.attachmentName,
+                attaching = state.attaching,
+                uriFor = viewModel::attachmentUri,
+                onPickTarget = viewModel::cameraTarget,
+                onCaptured = viewModel::attachCapture,
+                onPicked = viewModel::attachFrom,
+                onRemove = viewModel::removeAttachment
+            )
+
+            Spacer(Modifier.height(16.dp))
             TagSection(
                 allTags = state.allTags,
                 selectedTagIds = state.selectedTagIds,
