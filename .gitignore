@@ -14,3 +14,7 @@ local.properties
 keystore.properties
 *.keystore
 *.jks
+
+# Build artefacts - released as GitHub release assets, never committed
+*.apk
+*.aab
