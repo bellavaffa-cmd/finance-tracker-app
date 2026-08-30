@@ -19,6 +19,7 @@ object Routes {
     const val DATA = "data"
     const val GOALS = "goals"
     const val DEBTS = "debts"
+    const val IMPORT = "import"
 
     /** Entry doubles as add and edit; -1 means "new". */
     const val ENTRY = "entry/{transactionId}"

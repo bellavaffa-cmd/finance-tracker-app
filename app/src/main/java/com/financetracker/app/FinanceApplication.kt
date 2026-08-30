@@ -11,6 +11,7 @@ import com.financetracker.app.data.category.CategoryRepository
 import com.financetracker.app.data.category.DefaultCategories
 import com.financetracker.app.data.debt.DebtRepository
 import com.financetracker.app.data.goal.GoalRepository
+import com.financetracker.app.data.importer.ImportRepository
 import com.financetracker.app.data.recurring.RecurringRepository
 import com.financetracker.app.data.settings.SettingsRepository
 import com.financetracker.app.data.tag.TagRepository
@@ -60,6 +61,10 @@ class FinanceApplication : Application() {
             settings = settingsRepository,
             appVersion = BuildConfig.VERSION_NAME
         )
+    }
+
+    val importRepository: ImportRepository by lazy {
+        ImportRepository(context = this, database = database, settings = settingsRepository)
     }
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

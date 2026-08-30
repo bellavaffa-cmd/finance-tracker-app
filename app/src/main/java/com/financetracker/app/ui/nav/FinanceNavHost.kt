@@ -30,6 +30,8 @@ import com.financetracker.app.ui.debts.DebtsScreen
 import com.financetracker.app.ui.debts.DebtsViewModel
 import com.financetracker.app.ui.goals.GoalsScreen
 import com.financetracker.app.ui.goals.GoalsViewModel
+import com.financetracker.app.ui.importer.ImportScreen
+import com.financetracker.app.ui.importer.ImportViewModel
 import com.financetracker.app.ui.entry.EntryScreen
 import com.financetracker.app.ui.entry.EntryViewModel
 import com.financetracker.app.ui.home.HomeScreen
@@ -160,7 +162,17 @@ fun FinanceNavHost(application: FinanceApplication) {
             composable(Routes.DATA) {
                 val dataViewModel: DataViewModel =
                     viewModel(factory = DataViewModel.factory(application))
-                DataScreen(viewModel = dataViewModel, onBack = { navController.popBackStack() })
+                DataScreen(
+                    viewModel = dataViewModel,
+                    onBack = { navController.popBackStack() },
+                    onOpenImport = { navController.navigate(Routes.IMPORT) }
+                )
+            }
+
+            composable(Routes.IMPORT) {
+                val importViewModel: ImportViewModel =
+                    viewModel(factory = ImportViewModel.factory(application))
+                ImportScreen(viewModel = importViewModel, onBack = { navController.popBackStack() })
             }
         }
     }

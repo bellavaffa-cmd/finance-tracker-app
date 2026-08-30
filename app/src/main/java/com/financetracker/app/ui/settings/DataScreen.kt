@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -52,7 +53,11 @@ import com.financetracker.app.ui.theme.Positive
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DataScreen(viewModel: DataViewModel, onBack: () -> Unit) {
+fun DataScreen(
+    viewModel: DataViewModel,
+    onBack: () -> Unit,
+    onOpenImport: () -> Unit
+) {
     val state by viewModel.state.collectAsState()
     val lockEnabled by viewModel.appLockEnabled.collectAsState()
     val context = LocalContext.current
@@ -131,6 +136,13 @@ fun DataScreen(viewModel: DataViewModel, onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(8.dp))
+                    ActionRow(
+                        label = "Import a CSV",
+                        supporting = "Bring in transactions from a spreadsheet or bank export",
+                        icon = Icons.Filled.UploadFile,
+                        enabled = !state.busy,
+                        onClick = onOpenImport
+                    )
                     ActionRow(
                         label = "Restore from a backup",
                         supporting = "Pick a .json file saved by this app",

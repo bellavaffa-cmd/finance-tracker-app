@@ -55,6 +55,9 @@ all** — there is no server, no sync, and no telemetry. Everything lives in a d
 - Full JSON backup, and restore from one — everything, including preferences
 - CSV export of the ledger for a spreadsheet, with amounts in both the account's own currency and
   the base currency
+- CSV **import** from a spreadsheet or bank export: pick the file, match its columns, see a
+  preview, then commit. Handles either decimal convention, comma/semicolon/tab delimiters,
+  quoted fields, and skips rows that already exist
 - Optional app lock using the device keyguard: fingerprint, face, PIN, pattern or password
 - Files are written through the Storage Access Framework, so you choose where they go and the app
   needs no storage permission
@@ -85,6 +88,10 @@ A few decisions that are load-bearing:
   transaction, so a failure part-way leaves the existing data untouched.
 - **The app never stores a PIN of its own.** The lock delegates to the OS keyguard through
   BiometricPrompt, so the secret never reaches this process.
+- **The CSV importer never guesses silently.** Where a date could be read either way round it
+  says so before anything is written; rows it cannot read are listed by line number with a
+  reason rather than dropped; and transfers are reported as unimportable, because one CSV row
+  cannot say what a transfer did to both accounts and guessing would invent money.
 - **Net worth history is derived, never snapshotted.** Balance movements are replayed against each
   account's opening balance, so the newest point is always identical to the net worth on the
   dashboard and no background job can let the two drift apart. Past values are stated at today's
