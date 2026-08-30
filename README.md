@@ -130,9 +130,13 @@ Requires JDK 17 and the Android SDK.
 
 The APK lands in `app/build/outputs/apk/debug/`.
 
-For a signed release build, create `keystore.properties` in the project root with `storeFile`,
-`storePassword`, `keyAlias` and `keyPassword`. It is gitignored, and the release signing config is
-skipped when it is absent.
+This is a personal build with no release signing key, so `assembleDebug` is the one to use. Debug
+builds are signed with the local Android debug key, which is stable across builds, so each one
+installs over the last normally.
+
+`assembleRelease` still runs but emits an *unsigned* APK, which Android will refuse to install. To
+change that, add a `signingConfigs` block and a keystore of your own — note that once an app is
+installed under one signing key, only builds signed with that same key can ever update it.
 
 - minSdk 26, targetSdk 34, compileSdk 35
 - AGP 8.5.2, Kotlin 1.9.24, Compose BOM 2024.06.00, Room 2.6.1
