@@ -54,6 +54,9 @@ class TransactionRepository(
 
     fun balanceEffects(toMillis: Long): Flow<List<BalanceEffect>> = dao.observeBalanceEffects(toMillis)
 
+    fun nonRecurringSpend(fromMillis: Long, toMillis: Long): Flow<List<AmountRow>> =
+        dao.observeNonRecurringSpend(fromMillis, toMillis)
+
     fun amountRows(type: TxnType, fromMillis: Long, toMillis: Long): Flow<List<AmountRow>> =
         dao.observeAmountRows(type.name, fromMillis, toMillis)
 

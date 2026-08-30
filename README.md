@@ -38,6 +38,12 @@ all** — there is no server, no sync, and no telemetry. Everything lives in a d
 - Cross-cutting tags: one holiday's total across flights, food and hotels, or everything to claim
   back. Filter the ledger by tag, and see per-tag totals in reports
 
+**Forecast**
+- Projected balance at the end of the current period, from recurring commitments still to come and
+  a spending rate learned from recent history
+- Built on everyday accounts only, never savings or investments
+- Lists what is still due before the period ends
+
 **Trends**
 - Net worth over the last 12 months, reconstructed from the ledger rather than from stored
   snapshots, so it works over data entered before the feature existed
@@ -106,6 +112,13 @@ A few decisions that are load-bearing:
   says so before anything is written; rows it cannot read are listed by line number with a
   reason rather than dropped; and transfers are reported as unimportable, because one CSV row
   cannot say what a transfer did to both accounts and guessing would invent money.
+- **The forecast counts nothing twice.** Recurring bills are added from the schedule, so any
+  transaction a rule created is excluded from the spending average. Leaving them in both
+  places charges for rent twice and predicts a shortfall that is not there.
+- **The forecast uses spendable accounts, not net worth.** A healthy savings balance would
+  otherwise be counted as spending money and report that all is well while the current
+  account runs dry. A per-day figure is only quoted when it is a limit worth knowing;
+  offering one while there is money spare would read as "spend down to nothing by payday".
 - **Net worth history is derived, never snapshotted.** Balance movements are replayed against each
   account's opening balance, so the newest point is always identical to the net worth on the
   dashboard and no background job can let the two drift apart. Past values are stated at today's

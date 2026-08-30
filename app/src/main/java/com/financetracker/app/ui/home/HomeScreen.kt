@@ -40,7 +40,9 @@ import androidx.compose.ui.unit.dp
 import com.financetracker.app.data.Money
 import com.financetracker.app.data.account.AccountWithBalance
 import com.financetracker.app.data.budget.BudgetProgress
+import com.financetracker.app.data.forecast.Forecast
 import com.financetracker.app.data.recurring.RecurringRuleDetail
+import com.financetracker.app.data.txn.TxnType
 import com.financetracker.app.ui.common.CategoryDot
 import com.financetracker.app.ui.common.EmptyState
 import com.financetracker.app.ui.common.ProgressBar
@@ -101,6 +103,12 @@ fun HomeScreen(
                         AccountRow(account, hidden = state.hideBalances)
                     }
                 }
+            }
+        }
+
+        state.forecast?.let { forecast ->
+            if (forecast.daysRemaining > 0) {
+                item { ForecastCard(forecast, state.baseCurrency, state.hideBalances) }
             }
         }
 
@@ -262,6 +270,129 @@ private fun DueRulesCard(
                 }
                 TextButton(onClick = { onSkip(rule.id) }) { Text("Skip") }
                 TextButton(onClick = { onConfirm(rule.id) }) { Text("Add") }
+            }
+        }
+    }
+}
+
+/**
+ * The question a dashboard should answer: does the money last until the end of the period?
+ *
+ * Recurring commitments come from the schedule and everyday spending from recent history, and the
+ * two are kept strictly apart - anything a rule created is excluded from the average, or the bills
+ * would be counted once in the average and again as upcoming.
+ */
+@Composable
+private fun ForecastCard(forecast: Forecast, baseCurrency: String, hidden: Boolean) {
+    SectionCard(title = "Rest of ${forecast.period.label}") {
+        Text(
+            "Everyday accounts, not savings",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            if (hidden) HIDDEN else Money.format(forecast.projectedEndMinorBase, baseCurrency),
+            style = MaterialTheme.typography.headlineSmall,
+            color = if (forecast.willGoNegative) Negative else Positive
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "projected in ${forecast.daysRemaining} " +
+                if (forecast.daysRemaining == 1) "day" else "days",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatTile(
+                label = "Due in",
+                value = if (hidden) HIDDEN
+                else Money.format(forecast.expectedIncomeMinorBase, baseCurrency),
+                valueColor = Positive,
+                modifier = Modifier.weight(1f)
+            )
+            StatTile(
+                label = "Due out",
+                value = if (hidden) HIDDEN
+                else Money.format(forecast.expectedOutgoingsMinorBase, baseCurrency),
+                valueColor = Negative,
+                modifier = Modifier.weight(1f)
+            )
+            StatTile(
+                label = "Everyday",
+                value = if (hidden) HIDDEN
+                else Money.format(forecast.dailyBurnMinorBase, baseCurrency),
+                caption = "a day",
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Text(
+            when {
+                // Saying nothing is better than a confident number drawn from a fortnight of data.
+                !forecast.hasEnoughHistory ->
+                    "Not enough history yet for a spending estimate - this will sharpen up over " +
+                        "the next few weeks."
+                // A per-day figure is only quoted when it is a limit worth knowing. Offering one
+                // while there is money spare would read as "spend down to nothing by payday".
+                forecast.willGoNegative ->
+                    "You run short by ${Money.format(forecast.shortfallMinorBase, baseCurrency)} " +
+                        "before the period ends. Keeping to " +
+                        "${Money.format(forecast.budgetPerDayMinorBase, baseCurrency)} a day " +
+                        "would just cover it."
+                else ->
+                    "On your current ${Money.format(forecast.dailyBurnMinorBase, baseCurrency)} a " +
+                        "day, that leaves you comfortable to the end of the period."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = if (forecast.willGoNegative) Negative else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        if (forecast.items.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Still to come",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(4.dp))
+            forecast.items.take(4).forEach { item ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        item.name,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        relativeDueLabel(item.dueMillis),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        (if (item.type == TxnType.INCOME) "+" else "-") +
+                            Money.format(item.amountMinorBase, baseCurrency),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (item.type == TxnType.INCOME) Positive else Negative
+                    )
+                }
+            }
+            if (forecast.items.size > 4) {
+                Text(
+                    "and ${forecast.items.size - 4} more",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

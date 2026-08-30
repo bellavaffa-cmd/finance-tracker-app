@@ -10,6 +10,8 @@ import com.financetracker.app.data.account.AccountWithBalance
 import com.financetracker.app.data.budget.BudgetProgress
 import com.financetracker.app.data.budget.BudgetRepository
 import com.financetracker.app.data.category.CategoryRepository
+import com.financetracker.app.data.forecast.Forecast
+import com.financetracker.app.data.forecast.ForecastEngine
 import com.financetracker.app.data.recurring.RecurringRepository
 import com.financetracker.app.data.recurring.RecurringRuleDetail
 import com.financetracker.app.data.settings.SettingsRepository
@@ -38,7 +40,8 @@ data class HomeUiState(
     val budgets: List<BudgetProgress> = emptyList(),
     val recent: List<TransactionDetail> = emptyList(),
     val dueRules: List<RecurringRuleDetail> = emptyList(),
-    val monthlyCommitmentMinor: Long = 0
+    val monthlyCommitmentMinor: Long = 0,
+    val forecast: Forecast? = null
 ) {
     val netMinor: Long get() = incomeMinor - expenseMinor
 }
@@ -80,19 +83,30 @@ class HomeViewModel(
                 LedgerSnapshot(
                     accounts = accountList,
                     netWorthMinor = AccountRepository.netWorthMinorBase(accountList, rateMap, prefs.baseCurrency),
+                    spendableMinor = AccountRepository.spendableMinorBase(accountList, rateMap, prefs.baseCurrency),
                     expenseMinor = TransactionRepository.sumToBase(expenseRows, prefs.baseCurrency),
                     incomeMinor = TransactionRepository.sumToBase(incomeRows, prefs.baseCurrency),
                     recent = recent
                 )
             }
 
-            combine(
+            // The burn-rate window rides alongside the ledger so the final combine keeps its five
+            // slots for the things the dashboard already needed.
+            val ledgerWithBurn = combine(
                 ledger,
+                transactions.nonRecurringSpend(
+                    tick - ForecastEngine.BURN_WINDOW_DAYS * 86_400_000L,
+                    tick
+                )
+            ) { snapshot, spendRows -> snapshot to spendRows }
+
+            combine(
+                ledgerWithBurn,
                 budgets.activeBudgets,
                 categories.allCategories,
                 recurring.dueForConfirmation(tick),
                 recurring.activeRules
-            ) { snapshot, budgetList, categoryList, due, activeRules ->
+            ) { (snapshot, spendRows), budgetList, categoryList, due, activeRules ->
                 val categoriesById = categoryList.associateBy { it.id }
                 val commitments = activeRules
                     .filter { it.type == TxnType.EXPENSE }
@@ -108,6 +122,42 @@ class HomeViewModel(
                         )
                     }
 
+                // The ledger can be younger than the burn window, so the observed span is capped
+                // at its actual age - otherwise a fortnight of spending is divided across sixty
+                // days and the projection looks reassuringly, wrongly, low.
+                val earliest = transactions.earliestDateMillis()
+                val observedDays = if (earliest == null) 0 else minOf(
+                    ForecastEngine.BURN_WINDOW_DAYS,
+                    ForecastEngine.daysBetween(earliest, tick) + 1
+                )
+
+                // Rates are resolved here rather than inside the conversion lambda: looking them
+                // up is a suspending database call, and the engine is deliberately pure.
+                val ruleCurrencies = activeRules.associate { it.id to it.accountCurrency }
+                val ruleRates = ruleCurrencies.values.distinct()
+                    .associateWith { accounts.rateToBase(it, prefs.baseCurrency) }
+
+                val forecast = ForecastEngine.build(
+                    period = period,
+                    nowMillis = tick,
+                    spendableMinorBase = snapshot.spendableMinor,
+                    rules = activeRules.map { it.toRule() },
+                    ruleNames = activeRules.associate { it.id to it.name },
+                    ruleToBase = { amountMinor, ruleId ->
+                        val code = ruleCurrencies[ruleId] ?: prefs.baseCurrency
+                        Money.toBaseMinor(
+                            amountMinor,
+                            code,
+                            ruleRates[code] ?: 1.0,
+                            prefs.baseCurrency
+                        )
+                    },
+                    nonRecurringSpendMinorBase = TransactionRepository.sumToBase(
+                        spendRows, prefs.baseCurrency
+                    ),
+                    observedDays = observedDays
+                )
+
                 HomeUiState(
                     loading = false,
                     baseCurrency = prefs.baseCurrency,
@@ -120,7 +170,8 @@ class HomeViewModel(
                     budgets = budgets.progressFor(budgetList, period, categoriesById, prefs.baseCurrency),
                     recent = snapshot.recent,
                     dueRules = due,
-                    monthlyCommitmentMinor = commitments
+                    monthlyCommitmentMinor = commitments,
+                    forecast = forecast
                 )
             }
         }
@@ -141,6 +192,7 @@ class HomeViewModel(
     private data class LedgerSnapshot(
         val accounts: List<AccountWithBalance>,
         val netWorthMinor: Long,
+        val spendableMinor: Long,
         val expenseMinor: Long,
         val incomeMinor: Long,
         val recent: List<TransactionDetail>

@@ -72,6 +72,26 @@ class AccountRepository(
     }
 
     companion object {
+        /**
+         * What is actually available to spend before the period ends.
+         *
+         * Savings and investment accounts are excluded: a forecast built on net worth would count
+         * a healthy savings balance as spending money and cheerfully report that everything is
+         * fine while the current account runs dry.
+         */
+        fun spendableMinorBase(
+            accounts: List<AccountWithBalance>,
+            rates: Map<String, Double>,
+            baseCurrency: String
+        ): Long = accounts
+            .filter { !it.isArchived }
+            .filter { it.type != AccountType.SAVINGS && it.type != AccountType.INVESTMENT }
+            .sumOf { account ->
+                val rate = if (account.currencyCode == baseCurrency) 1.0
+                else rates[account.currencyCode] ?: 1.0
+                Money.toBaseMinor(account.balanceMinor, account.currencyCode, rate, baseCurrency)
+            }
+
         /** Net worth in base minor units, valuing each account at the current rate for its currency. */
         fun netWorthMinorBase(
             accounts: List<AccountWithBalance>,

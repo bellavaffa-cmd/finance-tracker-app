@@ -111,6 +111,27 @@ interface TransactionDao {
     )
     fun observeBalanceEffects(toMillis: Long): Flow<List<BalanceEffect>>
 
+    /**
+     * Everyday spending: expenses that no recurring rule created.
+     *
+     * The exclusion is the whole point. A forecast adds upcoming recurring bills from the schedule,
+     * so leaving rent in the spending average too would charge for it twice and predict a shortfall
+     * that is not there. Split parents are used whole rather than by leg, because the total is what
+     * a burn rate needs.
+     */
+    @Query(
+        "SELECT t.categoryId AS categoryId, c.name AS categoryName, c.colorArgb AS colorArgb, " +
+            "t.amountMinor AS amountMinor, a.currencyCode AS currencyCode, " +
+            "t.fxRateToBase AS fxRateToBase " +
+            "FROM txn t " +
+            "JOIN account a ON a.id = t.accountId " +
+            "LEFT JOIN category c ON c.id = t.categoryId " +
+            "WHERE t.deletedAtMillis IS NULL AND t.type = 'EXPENSE' " +
+            "AND t.recurringRuleId IS NULL " +
+            "AND t.dateMillis >= :fromMillis AND t.dateMillis < :toMillis"
+    )
+    fun observeNonRecurringSpend(fromMillis: Long, toMillis: Long): Flow<List<AmountRow>>
+
     @Query(DETAIL_SELECT + "WHERE t.deletedAtMillis IS NULL ORDER BY t.dateMillis DESC, t.id DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<TransactionDetail>>
 
