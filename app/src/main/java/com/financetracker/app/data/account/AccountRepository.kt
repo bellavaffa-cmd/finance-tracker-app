@@ -4,7 +4,14 @@ import com.financetracker.app.data.Money
 import com.financetracker.app.data.settings.CurrencyRate
 import com.financetracker.app.data.settings.CurrencyRateDao
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+
+/** Inputs for reconstructing past balances. */
+data class HistoryInputs(
+    val openingBalances: Map<Long, Long>,
+    val rates: Map<String, Double>
+)
 
 class AccountRepository(
     private val dao: AccountDao,
@@ -16,6 +23,18 @@ class AccountRepository(
         dao.observeWithBalances().map { list -> list.filter { !it.isArchived } }
 
     val rates: Flow<List<CurrencyRate>> = rateDao.observeAll()
+
+    /**
+     * The two things a historical reconstruction needs that a computed balance cannot supply:
+     * where each account started, and what its currency is worth now. Emitted together so callers
+     * do not have to spend two slots of a `combine` on them.
+     */
+    val historyInputs: Flow<HistoryInputs> = combine(dao.observeAll(), rates) { accounts, rateList ->
+        HistoryInputs(
+            openingBalances = accounts.associate { it.id to it.openingBalanceMinor },
+            rates = rateList.associate { it.code to it.rateToBase }
+        )
+    }
 
     suspend fun byId(id: Long): Account? = dao.byId(id)
 

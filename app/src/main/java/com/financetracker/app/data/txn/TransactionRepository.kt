@@ -49,6 +49,11 @@ class TransactionRepository(
         maxMinor = filter.maxMinor
     )
 
+    fun datedRows(type: TxnType, fromMillis: Long, toMillis: Long): Flow<List<DatedAmountRow>> =
+        dao.observeDatedRows(type.name, fromMillis, toMillis)
+
+    fun balanceEffects(toMillis: Long): Flow<List<BalanceEffect>> = dao.observeBalanceEffects(toMillis)
+
     fun amountRows(type: TxnType, fromMillis: Long, toMillis: Long): Flow<List<AmountRow>> =
         dao.observeAmountRows(type.name, fromMillis, toMillis)
 

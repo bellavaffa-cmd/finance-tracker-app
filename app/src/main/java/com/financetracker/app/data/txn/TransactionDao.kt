@@ -57,8 +57,59 @@ private const val SPLIT_AMOUNTS = "SELECT s.categoryId AS categoryId, " +
     "WHERE t.deletedAtMillis IS NULL AND t.type = :type " +
     "AND t.dateMillis >= :fromMillis AND t.dateMillis < :toMillis "
 
+/** Dated variant of the amount union, used for trends and anomaly detection. */
+private const val UNSPLIT_DATED = "SELECT t.categoryId AS categoryId, " +
+    "COALESCE(p.name, c.name) AS categoryName, " +
+    "COALESCE(p.colorArgb, c.colorArgb) AS colorArgb, " +
+    "t.amountMinor AS amountMinor, a.currencyCode AS currencyCode, " +
+    "t.fxRateToBase AS fxRateToBase, t.dateMillis AS dateMillis " +
+    "FROM txn t " +
+    "JOIN account a ON a.id = t.accountId " +
+    "LEFT JOIN category c ON c.id = t.categoryId " +
+    "LEFT JOIN category p ON p.id = c.parentId " +
+    "WHERE t.deletedAtMillis IS NULL AND t.type = :type " +
+    "AND t.dateMillis >= :fromMillis AND t.dateMillis < :toMillis " +
+    "AND NOT EXISTS (SELECT 1 FROM txn_split x WHERE x.txnId = t.id) "
+
+private const val SPLIT_DATED = "SELECT s.categoryId AS categoryId, " +
+    "COALESCE(p.name, c.name) AS categoryName, " +
+    "COALESCE(p.colorArgb, c.colorArgb) AS colorArgb, " +
+    "s.amountMinor AS amountMinor, a.currencyCode AS currencyCode, " +
+    "t.fxRateToBase AS fxRateToBase, t.dateMillis AS dateMillis " +
+    "FROM txn_split s " +
+    "JOIN txn t ON t.id = s.txnId " +
+    "JOIN account a ON a.id = t.accountId " +
+    "LEFT JOIN category c ON c.id = s.categoryId " +
+    "LEFT JOIN category p ON p.id = c.parentId " +
+    "WHERE t.deletedAtMillis IS NULL AND t.type = :type " +
+    "AND t.dateMillis >= :fromMillis AND t.dateMillis < :toMillis "
+
 @Dao
 interface TransactionDao {
+
+    @Query(UNSPLIT_DATED + "UNION ALL " + SPLIT_DATED)
+    fun observeDatedRows(type: String, fromMillis: Long, toMillis: Long): Flow<List<DatedAmountRow>>
+
+    /**
+     * Every balance movement before [toMillis], both legs of transfers included. Replaying these
+     * against each account's opening balance reconstructs history exactly, which is why net worth
+     * over time needs no snapshot table and works retroactively over data entered before the
+     * feature existed.
+     */
+    @Query(
+        "SELECT t.accountId AS accountId, a.currencyCode AS currencyCode, " +
+            "t.dateMillis AS dateMillis, " +
+            "CASE WHEN t.type = 'INCOME' THEN t.amountMinor ELSE -t.amountMinor END AS deltaMinor " +
+            "FROM txn t JOIN account a ON a.id = t.accountId " +
+            "WHERE t.deletedAtMillis IS NULL AND t.dateMillis < :toMillis " +
+            "UNION ALL " +
+            "SELECT t.toAccountId AS accountId, b.currencyCode AS currencyCode, " +
+            "t.dateMillis AS dateMillis, t.toAmountMinor AS deltaMinor " +
+            "FROM txn t JOIN account b ON b.id = t.toAccountId " +
+            "WHERE t.deletedAtMillis IS NULL AND t.toAccountId IS NOT NULL " +
+            "AND t.toAmountMinor IS NOT NULL AND t.dateMillis < :toMillis"
+    )
+    fun observeBalanceEffects(toMillis: Long): Flow<List<BalanceEffect>>
 
     @Query(DETAIL_SELECT + "WHERE t.deletedAtMillis IS NULL ORDER BY t.dateMillis DESC, t.id DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<TransactionDetail>>

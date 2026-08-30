@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.financetracker.app.data.Money
+import com.financetracker.app.data.insight.SpendingAnomaly
 import com.financetracker.app.data.tag.TagTotal
 import com.financetracker.app.data.txn.TxnType
 import com.financetracker.app.ui.common.CategoryDot
@@ -35,8 +36,11 @@ import com.financetracker.app.ui.common.EmptyState
 import com.financetracker.app.ui.common.PeriodBar
 import com.financetracker.app.ui.common.ProgressBar
 import com.financetracker.app.ui.common.SectionCard
+import com.financetracker.app.ui.common.StatTile
+import com.financetracker.app.ui.theme.Accent
 import com.financetracker.app.ui.theme.Negative
 import com.financetracker.app.ui.theme.Positive
+import com.financetracker.app.ui.theme.Warn
 import com.financetracker.app.ui.theme.Surface2
 
 @Composable
@@ -134,6 +138,85 @@ fun ReportsScreen(viewModel: ReportsViewModel) {
                     state.tagTotals.forEach { total ->
                         TagTotalRow(total, state.baseCurrency, state.totalMinorBase)
                     }
+                }
+            }
+        }
+
+        if (state.anomalies.isNotEmpty()) {
+            item {
+                SectionCard(title = "Worth a look") {
+                    Text(
+                        "Categories sitting well away from their own average over the last " +
+                            "few months.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    state.anomalies.take(5).forEach { anomaly ->
+                        AnomalyRow(anomaly, state.baseCurrency)
+                    }
+                }
+            }
+        }
+
+        if (state.netWorthHistory.size >= 2) {
+            item {
+                SectionCard(title = "Net worth") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StatTile(
+                            label = "Now",
+                            value = Money.format(
+                                state.netWorthHistory.last().netWorthMinorBase,
+                                state.baseCurrency
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                        StatTile(
+                            label = "Change",
+                            value = Money.format(
+                                state.netWorthChangeMinorBase,
+                                state.baseCurrency,
+                                withSign = true
+                            ),
+                            valueColor = if (state.netWorthChangeMinorBase >= 0) Positive else Negative,
+                            caption = "over ${state.netWorthHistory.size} months",
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    NetWorthChart(
+                        points = state.netWorthHistory,
+                        baseCurrency = state.baseCurrency
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Reconstructed from your ledger and valued at today's exchange rates.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        if (state.trend.isNotEmpty()) {
+            item {
+                SectionCard(title = "In and out") {
+                    IncomeExpenseChart(
+                        flows = state.trend,
+                        baseCurrency = state.baseCurrency
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        if (state.averageNetMinorBase >= 0) {
+                            "Averaging ${Money.format(state.averageNetMinorBase, state.baseCurrency)} " +
+                                "saved a month over this window."
+                        } else {
+                            "Averaging ${Money.format(-state.averageNetMinorBase, state.baseCurrency)} " +
+                                "more spent than earned each month over this window."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (state.averageNetMinorBase >= 0) Positive else Negative
+                    )
                 }
             }
         }
@@ -265,6 +348,42 @@ private fun TagTotalRow(total: TagTotal, baseCurrency: String, periodTotalMinor:
             color = Color(total.tag.colorArgb),
             height = 4
         )
+    }
+}
+
+@Composable
+private fun AnomalyRow(anomaly: SpendingAnomaly, baseCurrency: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CategoryDot(anomaly.colorArgb, size = 9)
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                anomaly.categoryName,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                "usually ${Money.format(anomaly.averageMinorBase, baseCurrency)} a month",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                Money.format(anomaly.thisMonthMinorBase, baseCurrency),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                // Spending less is good news, so it is not painted as a warning.
+                (if (anomaly.isIncrease) "+" else "") + "${anomaly.percentChange}%",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (anomaly.isIncrease) Warn else Positive
+            )
+        }
     }
 }
 

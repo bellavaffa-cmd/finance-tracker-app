@@ -38,6 +38,12 @@ all** — there is no server, no sync, and no telemetry. Everything lives in a d
 - Cross-cutting tags: one holiday's total across flights, food and hotels, or everything to claim
   back. Filter the ledger by tag, and see per-tag totals in reports
 
+**Trends**
+- Net worth over the last 12 months, reconstructed from the ledger rather than from stored
+  snapshots, so it works over data entered before the feature existed
+- Income against spending, month by month, on one shared scale
+- "Worth a look": categories sitting well away from their own recent average
+
 **Goals and debts**
 - Savings goals attached to an account, so progress is the real balance and can never drift from
   it. With a deadline, each goal shows what must go in per month to arrive on time
@@ -79,6 +85,13 @@ A few decisions that are load-bearing:
   transaction, so a failure part-way leaves the existing data untouched.
 - **The app never stores a PIN of its own.** The lock delegates to the OS keyguard through
   BiometricPrompt, so the secret never reaches this process.
+- **Net worth history is derived, never snapshotted.** Balance movements are replayed against each
+  account's opening balance, so the newest point is always identical to the net worth on the
+  dashboard and no background job can let the two drift apart. Past values are stated at today's
+  exchange rates, because only per-transaction historical rates are kept.
+- **An anomaly is measured against the category's own history, starting at its first activity.**
+  Averaging in months before a category was ever used drags its norm down far enough to flag
+  perfectly steady spending, which would fire on every category at once for a new install.
 - **Debt amortisation runs in whole minor units, not floating point.** Interest is rounded to the
   nearest unit each month, the way a lender actually charges it; simulating in floating point and
   rounding at the end drifts enough to move the payoff date by a month.

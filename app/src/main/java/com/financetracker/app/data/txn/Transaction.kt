@@ -88,3 +88,26 @@ data class AmountRow(
     val currencyCode: String,
     val fxRateToBase: Double
 )
+
+/** An [AmountRow] carrying its date, so a long window can be bucketed into months in one query. */
+data class DatedAmountRow(
+    val categoryId: Long?,
+    val categoryName: String?,
+    val colorArgb: Int?,
+    val amountMinor: Long,
+    val currencyCode: String,
+    val fxRateToBase: Double,
+    val dateMillis: Long
+)
+
+/**
+ * One movement of one account's balance. A transfer produces two of these - a debit on the source
+ * and a credit on the destination - so replaying them in date order reconstructs what any account
+ * held at any past moment without needing stored snapshots.
+ */
+data class BalanceEffect(
+    val accountId: Long,
+    val currencyCode: String,
+    val dateMillis: Long,
+    val deltaMinor: Long
+)

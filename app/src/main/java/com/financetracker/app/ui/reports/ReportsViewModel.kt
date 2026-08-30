@@ -5,6 +5,11 @@ import androidx.lifecycle.viewModelScope
 import com.financetracker.app.FinanceApplication
 import com.financetracker.app.data.Money
 import com.financetracker.app.data.MonthPeriod
+import com.financetracker.app.data.account.AccountRepository
+import com.financetracker.app.data.insight.InsightsEngine
+import com.financetracker.app.data.insight.MonthlyFlow
+import com.financetracker.app.data.insight.NetWorthPoint
+import com.financetracker.app.data.insight.SpendingAnomaly
 import com.financetracker.app.data.settings.SettingsRepository
 import com.financetracker.app.data.tag.TagRepository
 import com.financetracker.app.data.tag.TagTotal
@@ -37,8 +42,19 @@ data class ReportsUiState(
     val totalMinorBase: Long = 0,
     val comparisonMinorBase: Long = 0,
     val tagTotals: List<TagTotal> = emptyList(),
+    val trend: List<MonthlyFlow> = emptyList(),
+    val netWorthHistory: List<NetWorthPoint> = emptyList(),
+    val anomalies: List<SpendingAnomaly> = emptyList(),
     val loading: Boolean = true
 ) {
+    /** Average monthly saving across the trend window, which is the number people actually want. */
+    val averageNetMinorBase: Long
+        get() = if (trend.isEmpty()) 0 else trend.sumOf { it.netMinorBase } / trend.size
+
+    val netWorthChangeMinorBase: Long
+        get() = if (netWorthHistory.size < 2) 0
+        else netWorthHistory.last().netWorthMinorBase - netWorthHistory.first().netWorthMinorBase
+
     /** Signed change against the previous month, as a percentage. Null when there is nothing to compare. */
     val changePercent: Int?
         get() = if (comparisonMinorBase <= 0) null
@@ -49,7 +65,8 @@ data class ReportsUiState(
 class ReportsViewModel(
     private val settings: SettingsRepository,
     private val transactions: TransactionRepository,
-    private val tags: TagRepository
+    private val tags: TagRepository,
+    private val accounts: AccountRepository
 ) : ViewModel() {
 
     private val monthOffset = MutableStateFlow(0L)
@@ -65,11 +82,17 @@ class ReportsViewModel(
             val period = MonthPeriod.current(params.startDay).plusMonths(params.offset)
             val previous = period.plusMonths(-1)
 
+            // One window covers the trend chart, the net worth line and the anomaly baseline, so
+            // the longer range is queried once rather than once per month.
+            val window = MonthPeriod.trailing(period, TREND_MONTHS)
+            val windowStart = window.first().startMillis
+
             combine(
                 transactions.amountRows(params.direction, period.startMillis, period.endMillisExclusive),
                 transactions.amountRows(params.direction, previous.startMillis, previous.endMillisExclusive),
-                tags.tagTotals(params.direction, period.startMillis, period.endMillisExclusive, params.baseCurrency)
-            ) { rows, previousRows, tagTotals ->
+                tags.tagTotals(params.direction, period.startMillis, period.endMillisExclusive, params.baseCurrency),
+                insights(params, window, windowStart, period)
+            ) { rows, previousRows, tagTotals, insight ->
                 val total = TransactionRepository.sumToBase(rows, params.baseCurrency)
 
                 // Rows arrive grouped to their top-level category by SQL, so subcategory spending
@@ -97,6 +120,9 @@ class ReportsViewModel(
                     totalMinorBase = total,
                     comparisonMinorBase = TransactionRepository.sumToBase(previousRows, params.baseCurrency),
                     tagTotals = tagTotals,
+                    trend = insight.trend,
+                    netWorthHistory = insight.netWorth,
+                    anomalies = insight.anomalies,
                     loading = false
                 )
             }
@@ -111,6 +137,44 @@ class ReportsViewModel(
     fun centerLabel(state: ReportsUiState): String =
         Money.formatCompact(state.totalMinorBase, state.baseCurrency)
 
+    private data class Insight(
+        val trend: List<MonthlyFlow>,
+        val netWorth: List<NetWorthPoint>,
+        val anomalies: List<SpendingAnomaly>
+    )
+
+    /** The longer-range derivations, all fed by one dated query per direction. */
+    private fun insights(
+        params: Params,
+        window: List<MonthPeriod>,
+        windowStart: Long,
+        current: MonthPeriod
+    ) = combine(
+        transactions.datedRows(TxnType.INCOME, windowStart, current.endMillisExclusive),
+        transactions.datedRows(TxnType.EXPENSE, windowStart, current.endMillisExclusive),
+        transactions.balanceEffects(current.endMillisExclusive),
+        accounts.accountsWithBalances,
+        accounts.historyInputs
+    ) { incomeRows, expenseRows, effects, accountList, history ->
+        Insight(
+            trend = InsightsEngine.trend(incomeRows, expenseRows, window, params.baseCurrency),
+            netWorth = InsightsEngine.netWorthHistory(
+                effects = effects,
+                accounts = accountList.filter { !it.isArchived },
+                openingBalances = history.openingBalances,
+                periods = window,
+                rates = history.rates,
+                baseCurrency = params.baseCurrency
+            ),
+            anomalies = InsightsEngine.anomalies(
+                expenseRows = expenseRows,
+                current = current,
+                historyPeriods = window,
+                baseCurrency = params.baseCurrency
+            )
+        )
+    }
+
     private data class Params(
         val baseCurrency: String,
         val startDay: Int,
@@ -121,11 +185,15 @@ class ReportsViewModel(
     companion object {
         const val UNCATEGORISED_COLOR = 0xFF6B7688.toInt()
 
+        /** Twelve months is enough to see a shape without the bars becoming slivers. */
+        const val TREND_MONTHS = 12
+
         fun factory(app: FinanceApplication) = FinanceViewModelFactory(app) {
             ReportsViewModel(
                 settings = it.settingsRepository,
                 transactions = it.transactionRepository,
-                tags = it.tagRepository
+                tags = it.tagRepository,
+                accounts = it.accountRepository
             )
         }
     }
