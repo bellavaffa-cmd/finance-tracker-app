@@ -14,8 +14,8 @@ android {
         targetSdk 34
         // versionCode scheme matches MTG Companion: major*10000 + minor*100 + patch.
         // Bump BOTH per release - the updater compares versionName, Android compares versionCode.
-        versionCode 10100
-        versionName '1.1.0'
+        versionCode 10200
+        versionName '1.2.0'
 
         // The bundled OCR model ships native libraries for every ABI, which roughly triples the
         // APK. A personal build only ever runs on one architecture plus the emulator, so the
