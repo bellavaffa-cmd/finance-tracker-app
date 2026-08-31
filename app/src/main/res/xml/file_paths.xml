@@ -4,4 +4,6 @@
     <cache-path name="captures" path="." />
     <!-- Stored receipts, shared read-only when the user opens one in a viewer. -->
     <files-path name="receipts" path="receipts/" />
+    <!-- The app's external files dir, where the downloaded update APK is written. -->
+    <external-files-path name="updates" path="." />
 </paths>

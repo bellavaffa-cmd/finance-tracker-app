@@ -2,8 +2,12 @@
 
 A personal finance tracker for Android. Local-first, offline, no account.
 
-Native Kotlin + Jetpack Compose, Room for storage. The app declares **no internet permission at
-all** — there is no server, no sync, and no telemetry. Everything lives in a database on the device.
+Native Kotlin + Jetpack Compose, Room for storage. There is no server, no sync and no telemetry —
+the ledger lives in a database on the device and never leaves it.
+
+The app does use the network for exactly one thing: checking GitHub for a newer release and
+downloading it. That is the only reason `INTERNET` is declared. Receipt scanning runs on device,
+and no financial data is sent anywhere.
 
 ## Features
 

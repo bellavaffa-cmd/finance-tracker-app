@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -21,9 +22,11 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +50,7 @@ import com.financetracker.app.data.Money
 import com.financetracker.app.data.MonthPeriod
 import com.financetracker.app.ui.common.OptionPickerDialog
 import com.financetracker.app.ui.common.SectionCard
+import com.financetracker.app.data.update.UpdateManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,12 +63,14 @@ fun SettingsScreen(
     onOpenData: () -> Unit,
     onOpenGoals: () -> Unit,
     onOpenDebts: () -> Unit,
-    onOpenRules: () -> Unit
+    onOpenRules: () -> Unit,
+    updateManager: UpdateManager
 ) {
     val state by viewModel.uiState.collectAsState()
     var showCurrencyPicker by remember { mutableStateOf(false) }
     var showStartDayPicker by remember { mutableStateOf(false) }
     var editingRate by remember { mutableStateOf<String?>(null) }
+    val updateState by updateManager.state.collectAsState()
 
     Scaffold(
         topBar = {
@@ -165,11 +171,55 @@ fun SettingsScreen(
             }
 
             item {
+                SectionCard(title = "Updates") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !updateState.checking) {
+                                // Not silent: a manual check that says nothing looks broken.
+                                updateManager.checkForUpdate(silent = false)
+                            }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Filled.SystemUpdate,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Check for updates", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                updateState.message
+                                    ?: "Installed version ${com.financetracker.app.BuildConfig.VERSION_NAME}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (updateState.checking) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                    Text(
+                        "Fetched from the project's GitHub releases. This is the only thing the " +
+                            "app uses the network for - no ledger data ever leaves the device.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            item {
                 SectionCard(title = "About") {
                     Text(
-                        "Everything is stored on this device only. There is no account, no server " +
-                            "and no network access. Take a backup from Data & security so it " +
-                            "survives losing the phone.",
+                        "Your ledger is stored on this device only - no account, no server, and " +
+                            "nothing financial is ever sent anywhere. The network is used solely " +
+                            "to check for app updates. Take a backup from Data & security so your " +
+                            "data survives losing the phone.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

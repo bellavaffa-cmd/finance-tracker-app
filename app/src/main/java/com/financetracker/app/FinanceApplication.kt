@@ -7,6 +7,7 @@ import com.financetracker.app.data.account.AccountRepository
 import com.financetracker.app.data.account.AccountType
 import com.financetracker.app.data.attachment.AttachmentStore
 import com.financetracker.app.data.receipt.ReceiptScanner
+import com.financetracker.app.data.update.UpdateManager
 import com.financetracker.app.data.backup.BackupRepository
 import com.financetracker.app.data.budget.BudgetRepository
 import com.financetracker.app.data.category.CategoryRepository
@@ -33,6 +34,8 @@ class FinanceApplication : Application() {
     val attachmentStore: AttachmentStore by lazy { AttachmentStore(this) }
 
     val receiptScanner: ReceiptScanner by lazy { ReceiptScanner(this) }
+
+    val updateManager: UpdateManager by lazy { UpdateManager(this) }
 
     val accountRepository: AccountRepository by lazy {
         AccountRepository(database.accountDao(), database.currencyRateDao())

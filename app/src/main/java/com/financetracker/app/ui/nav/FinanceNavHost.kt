@@ -10,6 +10,8 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -49,6 +51,7 @@ import com.financetracker.app.ui.transactions.TransactionsScreen
 import com.financetracker.app.ui.theme.Accent
 import com.financetracker.app.ui.theme.Bg
 import com.financetracker.app.ui.transactions.TransactionsViewModel
+import com.financetracker.app.ui.update.UpdateDialog
 
 @Composable
 fun FinanceNavHost(application: FinanceApplication) {
@@ -62,6 +65,12 @@ fun FinanceNavHost(application: FinanceApplication) {
     val budgetViewModel: BudgetViewModel = viewModel(factory = BudgetViewModel.factory(application))
     val reportsViewModel: ReportsViewModel = viewModel(factory = ReportsViewModel.factory(application))
     val manageViewModel: ManageViewModel = viewModel(factory = ManageViewModel.factory(application))
+
+    val updateManager = application.updateManager
+    val updateState by updateManager.state.collectAsState()
+    // One quiet check per launch; a failure here is silent because it is never the reason the user
+    // opened a finance app.
+    LaunchedEffect(Unit) { updateManager.checkForUpdate() }
 
     // The bottom bar and add button belong to the four top-level tabs only; the entry screen and
     // the management screens bring their own chrome.
@@ -134,7 +143,8 @@ fun FinanceNavHost(application: FinanceApplication) {
                     onOpenData = { navController.navigate(Routes.DATA) },
                     onOpenGoals = { navController.navigate(Routes.GOALS) },
                     onOpenDebts = { navController.navigate(Routes.DEBTS) },
-                    onOpenRules = { navController.navigate(Routes.RULES) }
+                    onOpenRules = { navController.navigate(Routes.RULES) },
+                    updateManager = updateManager
                 )
             }
 
@@ -184,6 +194,16 @@ fun FinanceNavHost(application: FinanceApplication) {
                 ImportScreen(viewModel = importViewModel, onBack = { navController.popBackStack() })
             }
         }
+    }
+
+    val update = updateState.available
+    if (update != null && !updateState.dismissed) {
+        UpdateDialog(
+            info = update,
+            state = updateState,
+            onUpdate = { updateManager.startUpdate() },
+            onDismiss = { updateManager.dismiss() }
+        )
     }
 }
 

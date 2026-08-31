@@ -12,7 +12,9 @@ android {
         applicationId 'com.financetracker.app'
         minSdk 26
         targetSdk 34
-        versionCode 100
+        // versionCode scheme matches MTG Companion: major*10000 + minor*100 + patch.
+        // Bump BOTH per release - the updater compares versionName, Android compares versionCode.
+        versionCode 10000
         versionName '1.0.0'
 
         // The bundled OCR model ships native libraries for every ABI, which roughly triples the
@@ -91,4 +93,7 @@ dependencies {
     // and runs entirely on device, so reading a receipt needs no network and the app keeps
     // having no INTERNET permission. It costs APK size, which is the right trade here.
     implementation 'com.google.mlkit:text-recognition:16.0.1'
+
+    // Only used by the OTA updater - the app makes no other network calls.
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
