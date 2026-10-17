@@ -48,7 +48,7 @@ object LedgerCsv {
 
     data class Parsed(val rows: List<Row>, val errors: List<String>, val warnings: List<String>)
 
-    private enum class Col { DATE, TYPE, ACCOUNT, TO_ACCOUNT, CATEGORY, PAYEE, NOTE, AMOUNT }
+    private enum class Col { DATE, TYPE, ACCOUNT, TO_ACCOUNT, CATEGORY, PAYEE, NOTE, AMOUNT, BASE_AMOUNT }
 
     private val aliases: Map<String, Col> = mapOf(
         "date" to Col.DATE, "bookingdate" to Col.DATE, "transactiondate" to Col.DATE,
@@ -59,6 +59,9 @@ object LedgerCsv {
         "payee" to Col.PAYEE, "description" to Col.PAYEE, "merchant" to Col.PAYEE, "name" to Col.PAYEE,
         "note" to Col.NOTE, "notes" to Col.NOTE, "memo" to Col.NOTE,
         "amount" to Col.AMOUNT, "value" to Col.AMOUNT,
+        // Finance Tracker 1.x exports each amount in its account's currency and again converted to
+        // the base currency. 2.0 keeps one currency, so the base figure is the one to take.
+        "amountinbase" to Col.BASE_AMOUNT,
     )
 
     /** Rows it cannot read are reported by line with a reason, never silently dropped. */
@@ -86,8 +89,9 @@ object LedgerCsv {
             val line = index + 2
             val date = DateOrder.parse(cell(r, Col.DATE), order)
             if (date == null) { errors += "Line $line: can't read the date \"${cell(r, Col.DATE)}\"."; return@forEachIndexed }
-            val signed = Money.parse(cell(r, Col.AMOUNT), currency)
-            if (signed == null || signed == 0L) { errors += "Line $line: can't read the amount \"${cell(r, Col.AMOUNT)}\"."; return@forEachIndexed }
+            val amountText = cell(r, Col.BASE_AMOUNT).ifEmpty { cell(r, Col.AMOUNT) }
+            val signed = Money.parse(amountText, currency)
+            if (signed == null || signed == 0L) { errors += "Line $line: can't read the amount \"$amountText\"."; return@forEachIndexed }
             val typeText = cell(r, Col.TYPE).lowercase()
             val type = when {
                 typeText.isEmpty() -> if (signed < 0) TxnType.EXPENSE else TxnType.INCOME

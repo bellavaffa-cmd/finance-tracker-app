@@ -82,6 +82,20 @@ class LedgerCsvTest {
         assertEquals(listOf("Coffee" to CategoryKind.EXPENSE), plan.newCategories)
     }
 
+    @Test fun readsFinanceTracker1Export() {
+        val csv = "\uFEFFDate,Time,Type,Amount,Currency,AmountInBase,BaseCurrency,FxRateToBase,Account,ToAccount," +
+            "AmountReceived,ReceivedCurrency,Category,Parent category,Payee,Note,Tags,Split,Recurring\r\n" +
+            "2026-10-03,12:30,Expense,-20.00,USD,-18.40,EUR,0.92,US card,,,,Eating out,Food,Diner,,holiday,,\r\n" +
+            "2026-10-04,09:00,Income,2500.00,EUR,2500.00,EUR,1,Bank,,,,Salary,,Employer,,,,yes\r\n" +
+            "2026-10-05,10:00,Transfer,500.00,EUR,,EUR,1,Bank,Savings,500.00,EUR,,,,,,,\r\n"
+        val parsed = LedgerCsv.parse(csv, "EUR")
+        assertEquals(emptyList<String>(), parsed.errors)
+        assertEquals(listOf(TxnType.EXPENSE, TxnType.INCOME, TxnType.TRANSFER), parsed.rows.map { it.type })
+        assertEquals(listOf(1840L, 250000L, 50000L), parsed.rows.map { it.amount })
+        assertEquals("Eating out", parsed.rows[0].category)
+        assertEquals("Savings", parsed.rows[2].toAccount)
+    }
+
     @Test fun csvHandlesQuotesNewlinesAndDelimiters() {
         val rows = Csv.parse("﻿a\tb\n\"x\ty\"\t\"line1\nline2\"\r\n\n")
         assertEquals(listOf(listOf("a", "b"), listOf("x\ty", "line1\nline2")), rows)

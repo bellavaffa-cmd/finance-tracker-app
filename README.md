@@ -6,8 +6,9 @@ Native Kotlin + Jetpack Compose (Material 3), Room for storage. The app declares
 at all**: there is no network access, and files are read and written through the system file
 picker, so no storage permission is needed either.
 
-It installs as `com.financetracker.v2`, **alongside** the 1.x app rather than over it, so the 1.x
-ledger stays exactly where it was.
+It keeps the 1.x application id, `com.financetracker.app`, and replaces 1.x. The 2.0 database is
+new, so 1.x data does not carry over by itself: export a CSV from 1.x first and import it into 2.0.
+The importer reads the 1.x export directly, taking the base-currency amount from each row.
 
 ## Features
 
