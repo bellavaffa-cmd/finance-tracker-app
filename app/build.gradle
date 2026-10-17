@@ -19,9 +19,26 @@ android {
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
 
-    // Personal build with no release signing key: use `assembleDebug`.
+    // Release builds are signed with the project's release key, which lives only in GitHub secrets
+    // (see .github/workflows/build-apk.yml). Every release must use that same key: Android will
+    // only install an update signed by the key the installed app was signed with.
+    def releaseKeystore = System.getenv('RELEASE_KEYSTORE_FILE')
+    signingConfigs {
+        release {
+            if (releaseKeystore) {
+                storeFile file(releaseKeystore)
+                storePassword System.getenv('RELEASE_KEYSTORE_PASSWORD')
+                keyAlias 'release'
+                keyPassword System.getenv('RELEASE_KEYSTORE_PASSWORD')
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (releaseKeystore) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }

@@ -4,6 +4,11 @@ on:
   push:
     branches: ['**']
   workflow_dispatch:
+    inputs:
+      release:
+        description: 'Publish a GitHub release for the version in app/build.gradle'
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -34,3 +39,54 @@ jobs:
           name: ${{ env.APK_NAME }}
           path: ${{ env.APK_NAME }}.apk
           if-no-files-found: error
+
+  # Release builds are signed with the release key held in the repository secrets, so every
+  # published version can install over the last.
+  release:
+    if: github.event_name == 'workflow_dispatch' && inputs.release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Read version
+        run: echo "VERSION=$(sed -n "s/.*versionName '\(.*\)'.*/\1/p" app/build.gradle)" >> "$GITHUB_ENV"
+
+      - name: Check release prerequisites
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASSWORD" ] \
+            || { echo "::error::RELEASE_KEYSTORE_BASE64 and RELEASE_KEYSTORE_PASSWORD secrets are required"; exit 1; }
+          [ -f ".github/release-notes/v${VERSION}.md" ] \
+            || { echo "::error::Missing .github/release-notes/v${VERSION}.md"; exit 1; }
+
+      - name: Build signed release APK
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.p12"
+          RELEASE_KEYSTORE_FILE="$RUNNER_TEMP/release.p12" ./gradlew --no-daemon assembleRelease
+          apk=app/build/outputs/apk/release/app-release.apk
+          [ -f "$apk" ] || { echo "::error::Release APK was not signed"; exit 1; }
+          cp "$apk" "finance-tracker-v${VERSION}.apk"
+          rm -f "$RUNNER_TEMP/release.p12"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${VERSION}" "finance-tracker-v${VERSION}.apk" \
+            --target "$GITHUB_SHA" \
+            --title "v${VERSION}" \
+            --notes-file ".github/release-notes/v${VERSION}.md"
