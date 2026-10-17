@@ -1,183 +1,79 @@
-# Finance Tracker
+# Finance Tracker 2
 
-A personal finance tracker for Android. Local-first, offline, no account.
+A personal finance tracker for Android, rebuilt from scratch. Local-first, offline, no account.
 
-Native Kotlin + Jetpack Compose, Room for storage. There is no server, no sync and no telemetry —
-the ledger lives in a database on the device and never leaves it.
+Native Kotlin + Jetpack Compose (Material 3), Room for storage. The app declares **no permissions
+at all**: there is no network access, and files are read and written through the system file
+picker, so no storage permission is needed either.
 
-The app does use the network for exactly one thing: checking GitHub for a newer release and
-downloading it. That is the only reason `INTERNET` is declared. Receipt scanning runs on device,
-and no financial data is sent anywhere.
+It installs as `com.financetracker.v2`, **alongside** the 1.x app rather than over it, so the 1.x
+ledger stays exactly where it was.
 
 ## Features
 
 **Ledger**
-- Accounts: cash, bank, credit card, savings, investment — each with its own currency, opening
-  balance and colour
+- Accounts (cash, bank, credit card, savings) with an opening balance; archive an account you no
+  longer use without losing its history
 - Expenses, income, and transfers between your own accounts
-- Two-level categories, fully editable, with a usable default set on first launch
-- Multi-currency, including cross-currency transfers
+- Editable categories with colours; a default set is created on first launch
+- Monthly ledger with search across payee, note, category and account, grouped by day
+- Typing a payee you have used before fills in the category you used last time
 
 **Budgets**
-- A monthly limit per category, plus an optional cap on total spending
-- Optional rollover: an underspent month raises next month's allowance, an overspent one lowers it
-- The budgeting month boundary is configurable (1st–28th), so budgets can line up with a pay cycle
-  rather than the calendar
-
-**Recurring**
-- Rent, salary, subscriptions — daily, weekly, monthly or yearly, every N periods
-- Either posts itself on schedule or waits on the dashboard for you to confirm
-- Catches up occurrence by occurrence if the app has not been opened for a while
-- Shows what you are committed to each month, normalised across mixed frequencies
+- A monthly limit per spending category, with progress bars that turn amber at 80% and red when over
+- Totals across all budgeted categories; the home screen flags any budget at 80% or more
 
 **Reports**
-- Donut chart of spending (or income) by category for a month, with subcategories rolled up into
-  their parent
-- Month-on-month comparison
-- Per-category breakdown with share of total
+- Donut chart of spending or income by category for any month, with share of total
+- Income vs spending for the last six months, plus each month's net
 
-**Splits and tags**
-- Split one payment across several categories, with a running remainder so it is always clear how
-  much is still unassigned — a split that does not add up cannot be saved
-- Cross-cutting tags: one holiday's total across flights, food and hotels, or everything to claim
-  back. Filter the ledger by tag, and see per-tag totals in reports
-
-**Forecast**
-- Projected balance at the end of the current period, from recurring commitments still to come and
-  a spending rate learned from recent history
-- Built on everyday accounts only, never savings or investments
-- Lists what is still due before the period ends
-
-**Trends**
-- Net worth over the last 12 months, reconstructed from the ledger rather than from stored
-  snapshots, so it works over data entered before the feature existed
-- Income against spending, month by month, on one shared scale
-- "Worth a look": categories sitting well away from their own recent average
-
-**Goals and debts**
-- Savings goals attached to an account, so progress is the real balance and can never drift from
-  it. With a deadline, each goal shows what must go in per month to arrive on time
-- Debts with rate and minimum payment, showing how long each takes on the minimum alone
-- Snowball vs avalanche compared side by side on your actual numbers, including what the difference
-  costs in interest and months
-
-**Receipts**
-- Attach a photo or an image file to any transaction, view it full size, replace or remove it
-- Images are downscaled on the way in — a 3000×4000 camera photo lands at around 18 KB and stays
-  perfectly readable
-- **No camera permission.** Photos go through the system camera app via `ACTION_IMAGE_CAPTURE`,
-  which needs no grant as long as the app does not declare one
-- Reads the total off the photo and offers it, along with the shop name. Recognition runs entirely
-  on device — the model ships inside the APK, so a receipt photograph never leaves the phone
-
-**Auto-categorise**
-- Rules that fill in the category when a payee matches: contains / starts with / is exactly
-- Applied as you enter a transaction, on every row of a CSV import, and retroactively to entries
-  that have no category yet
-- Can also tidy a messy bank description into one consistent payee name
-- Suggests rules from payees you have already filed the same way several times
-
-**Data & security**
-- Full JSON backup, and restore from one — everything, including preferences
-- CSV export of the ledger for a spreadsheet, with amounts in both the account's own currency and
-  the base currency
-- CSV **import** from a spreadsheet or bank export: pick the file, match its columns, see a
-  preview, then commit. Handles either decimal convention, comma/semicolon/tab delimiters,
-  quoted fields, and skips rows that already exist
-- Optional app lock using the device keyguard: fingerprint, face, PIN, pattern or password
-- Files are written through the Storage Access Framework, so you choose where they go and the app
-  needs no storage permission
-
-**Entry**
-The screen the app lives or dies on. Amounts are typed on a keypad in minor units — tapping
-`2 3 5 0` gives `€23.50`, so there is no decimal point to fight. Account, date and exchange rate
-arrive pre-filled, and typing a payee recalls the category you last filed it under.
+**Import / export**
+- CSV export of the whole ledger
+- CSV import of that same format, or of a typical bank export (`Date`, `Description`, signed
+  `Amount`). Missing accounts and categories are created. Rows already in the ledger are skipped,
+  and rows that can't be read are listed by line number with a reason
+- Full JSON backup, and restore from one
 
 ## Design notes
 
-A few decisions that are load-bearing:
-
-- **Money is stored as a `Long` count of minor units, never a floating-point number.** The number of
-  minor digits comes from the currency (EUR 2, JPY 0, KWD 3), never a hardcoded 100.
-- **Exchange rates are frozen onto each transaction at entry and never recalculated.** Last year's
-  reports do not shift when this year's rate moves. A separate table holds current rates, used only
-  for valuing net worth and pre-filling new entries. Rates are entered by hand — nothing is fetched.
+- **Money is a `Long` count of minor units, never floating point.** The number of minor digits
+  comes from the currency (EUR 2, JPY 0, KWD 3).
 - **Transfers are excluded from every income and expense total.** Moving your own money between your
-  own accounts is not spending, and counting it is the standard way a homemade tracker ends up
-  reporting double the expenses you actually had.
-- **Deletes are soft.** Removing a category un-categorises its transactions and promotes its
-  subcategories rather than destroying history; an account that has transactions can only be
-  archived.
-- **Restoring replaces, it does not merge.** Merging two ledgers safely needs a stable identity for
-  each transaction across devices; without one, a merge would silently duplicate or drop entries —
-  the two failure modes a finance app can least afford. The whole restore runs in one database
-  transaction, so a failure part-way leaves the existing data untouched.
-- **The app never stores a PIN of its own.** The lock delegates to the OS keyguard through
-  BiometricPrompt, so the secret never reaches this process.
-- **A scanned total is offered, never applied.** A figure read off a photograph is a guess,
-  and a wrong amount written silently into a ledger is worse than no amount at all. The line
-  it came from is shown so the suggestion can be judged at a glance.
-- **Receipt parsing uses the text's geometry, not its list order.** Recognition returns a
-  receipt's label column and amount column as separate blocks, so the line following
-  "TOTAL" in list order is frequently an item two rows above it. Amounts are paired with
-  their label by vertical overlap instead.
-- **Receipts live in app-private storage and are not in the JSON backup.** Embedding them
-  would turn a small text file into hundreds of megabytes of base64; Android's own app
-  backup covers the image files instead. The backup carries the file name, and a restore
-  sweeps up images the new ledger no longer references.
-- **Rules are plain matches, not regular expressions.** A regex that backtracks badly can hang
-  the entry screen and a wrong one fails invisibly; three match types cover essentially every
-  merchant string without either risk. The first match wins, ordered by priority and then by
-  pattern length, so a specific rule is never shadowed by a vaguer one written later.
-- **A rule never overwrites a decision you made.** It only fills a category that is empty -
-  on entry, on import, and in the retroactive pass. A category named in a CSV always beats a
-  rule, because that is your own statement about the row.
-- **The CSV importer never guesses silently.** Where a date could be read either way round it
-  says so before anything is written; rows it cannot read are listed by line number with a
-  reason rather than dropped; and transfers are reported as unimportable, because one CSV row
-  cannot say what a transfer did to both accounts and guessing would invent money.
-- **The forecast counts nothing twice.** Recurring bills are added from the schedule, so any
-  transaction a rule created is excluded from the spending average. Leaving them in both
-  places charges for rent twice and predicts a shortfall that is not there.
-- **The forecast uses spendable accounts, not net worth.** A healthy savings balance would
-  otherwise be counted as spending money and report that all is well while the current
-  account runs dry. A per-day figure is only quoted when it is a limit worth knowing;
-  offering one while there is money spare would read as "spend down to nothing by payday".
-- **Net worth history is derived, never snapshotted.** Balance movements are replayed against each
-  account's opening balance, so the newest point is always identical to the net worth on the
-  dashboard and no background job can let the two drift apart. Past values are stated at today's
-  exchange rates, because only per-transaction historical rates are kept.
-- **An anomaly is measured against the category's own history, starting at its first activity.**
-  Averaging in months before a category was ever used drags its norm down far enough to flag
-  perfectly steady spending, which would fire on every category at once for a new install.
-- **Debt amortisation runs in whole minor units, not floating point.** Interest is rounded to the
-  nearest unit each month, the way a lender actually charges it; simulating in floating point and
-  rounding at the end drifts enough to move the payoff date by a month.
-- **A split transaction contributes its legs to reports, never itself.** Category totals come from a
-  union that excludes any transaction which has splits, so a split payment cannot be counted twice.
-  The parent carries no category of its own, and the legs must sum to it exactly.
+  own accounts is not spending.
+- **Amounts are parsed in either decimal convention** (`1,234.56` and `1.234,56`), and a value with
+  more decimals than the currency allows is rejected rather than rounded.
+- **CSV dates are read with one rule for the whole file.** `03/04/2026` cannot be read differently
+  on two lines; if every date is ambiguous the import says how it read them.
+- **Duplicates are counted, not just matched.** Two identical coffees on the same day both import
+  unless the ledger already has both.
+- **Deletes don't destroy history.** Deleting a category leaves its transactions uncategorised; an
+  account with transactions can only be archived.
+- **Restore replaces, it does not merge, and it is validated first.** A backup with dangling
+  references is rejected before anything is touched, and the replacement runs in one database
+  transaction.
+- **Changing currency relabels, it never converts.** A switch to a currency with a different number
+  of decimals is blocked once there are transactions, since every stored amount would be misread.
+
+## Layout
+
+```
+app/src/main/java/com/financetracker/app/
+  data/     Room entities, DAO, database (with first-launch seed), repository
+  domain/   Plain Kotlin: money, CSV, ledger maths, backup codec. No Android imports
+  ui/       ViewModel, theme, shared components, one file per screen in ui/screens
+app/src/test/  JVM unit tests for the domain layer
+```
 
 ## Building
 
 Requires JDK 17 and the Android SDK.
 
 ```bash
-./gradlew assembleDebug
+./gradlew assembleDebug        # APK in app/build/outputs/apk/debug/
+./gradlew testDebugUnitTest    # domain tests
 ```
 
-The APK is large (~43 MB) because the on-device text recognition model is bundled rather
-than downloaded. `abiFilters` trims it to `arm64-v8a` and `x86_64`; add your architecture
-there if you build for something else.
-
-The APK lands in `app/build/outputs/apk/debug/`.
-
-This is a personal build with no release signing key, so `assembleDebug` is the one to use. Debug
-builds are signed with the local Android debug key, which is stable across builds, so each one
-installs over the last normally.
-
-`assembleRelease` still runs but emits an *unsigned* APK, which Android will refuse to install. To
-change that, add a `signingConfigs` block and a keystore of your own — note that once an app is
-installed under one signing key, only builds signed with that same key can ever update it.
+This is a personal build with no release signing key, so use `assembleDebug`.
 
 - minSdk 26, targetSdk 34, compileSdk 35
 - AGP 8.5.2, Kotlin 1.9.24, Compose BOM 2024.06.00, Room 2.6.1
