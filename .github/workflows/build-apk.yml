@@ -4,11 +4,6 @@ on:
   push:
     branches: ['**']
   workflow_dispatch:
-    inputs:
-      release:
-        description: 'Publish a GitHub release for the version in app/build.gradle'
-        type: boolean
-        default: false
 
 jobs:
   build:
@@ -40,10 +35,11 @@ jobs:
           path: ${{ env.APK_NAME }}.apk
           if-no-files-found: error
 
-  # Release builds are signed with the release key held in the repository secrets, so every
-  # published version can install over the last.
+  # Publishes v<versionName> once, from the first push where everything it needs is in place: the
+  # signing secrets, release notes for that version, and no existing tag. Until then it skips.
+  # Release builds are signed with the key in the repository secrets, so each version installs
+  # over the last.
   release:
-    if: github.event_name == 'workflow_dispatch' && inputs.release
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -51,38 +47,48 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Decide whether to publish
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          version=$(sed -n "s/.*versionName '\(.*\)'.*/\1/p" app/build.gradle)
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          if gh release view "v$version" > /dev/null 2>&1; then
+            echo "::notice::v$version is already released"; exit 0
+          fi
+          if [ ! -f ".github/release-notes/v$version.md" ]; then
+            echo "::notice::No .github/release-notes/v$version.md, so v$version is not released"; exit 0
+          fi
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::warning::v$version is ready to release but the RELEASE_KEYSTORE_BASE64 / RELEASE_KEYSTORE_PASSWORD secrets are not set"; exit 0
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-java@v4
+        if: steps.check.outputs.publish == 'true'
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
 
-      - name: Read version
-        run: echo "VERSION=$(sed -n "s/.*versionName '\(.*\)'.*/\1/p" app/build.gradle)" >> "$GITHUB_ENV"
-
-      - name: Check release prerequisites
-        env:
-          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-        run: |
-          [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASSWORD" ] \
-            || { echo "::error::RELEASE_KEYSTORE_BASE64 and RELEASE_KEYSTORE_PASSWORD secrets are required"; exit 1; }
-          [ -f ".github/release-notes/v${VERSION}.md" ] \
-            || { echo "::error::Missing .github/release-notes/v${VERSION}.md"; exit 1; }
-
       - name: Build signed release APK
+        if: steps.check.outputs.publish == 'true'
         env:
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
         run: |
           echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.p12"
           RELEASE_KEYSTORE_FILE="$RUNNER_TEMP/release.p12" ./gradlew --no-daemon assembleRelease
+          rm -f "$RUNNER_TEMP/release.p12"
           apk=app/build/outputs/apk/release/app-release.apk
           [ -f "$apk" ] || { echo "::error::Release APK was not signed"; exit 1; }
           cp "$apk" "finance-tracker-v${VERSION}.apk"
-          rm -f "$RUNNER_TEMP/release.p12"
 
       - name: Publish release
+        if: steps.check.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
